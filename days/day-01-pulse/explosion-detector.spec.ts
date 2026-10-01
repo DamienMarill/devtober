@@ -43,12 +43,36 @@ describe('findExplosions', () => {
     expect(findExplosions(track, RATE)).toEqual([]);
   });
 
-  it('ne trouve rien dans un morceau uniformément dense', () => {
-    expect(findExplosions(signal(16, () => 0.3 * noise()), RATE)).toEqual([]);
+  it('sans repli, un extrait uniformément dense n’a aucune hausse à montrer', () => {
+    expect(findExplosions(signal(16, () => 0.3 * noise()), RATE, { sustained: false })).toEqual([]);
+    expect(findExplosions(signal(12, () => 0.5 * noise()), RATE, { sustained: false })).toEqual([]);
+  });
+});
+
+describe('findExplosions : extrait déjà à fond (repli)', () => {
+  it('compte comme explosion un extrait dense ET fort du début à la fin', () => {
+    const [explosion, ...rest] = findExplosions(signal(16, () => 0.5 * noise()), RATE);
+    expect(rest).toHaveLength(0);
+    expect(explosion.start).toBeLessThan(2.5);
+    expect(explosion.end).toBeGreaterThan(13.5);
   });
 
-  it('ne peut pas trouver d’explosion dans un extrait qui démarre déjà à fond', () => {
-    expect(findExplosions(signal(12, () => 0.5 * noise()), RATE)).toEqual([]);
+  it('ne détecte rien dans un extrait sobre, même fort (une note n’explose pas)', () => {
+    expect(findExplosions(signal(16, (t) => 0.7 * Math.sin(2 * Math.PI * 440 * t)), RATE)).toEqual([]);
+  });
+
+  it('ne détecte rien dans un extrait dense mais faible', () => {
+    expect(findExplosions(signal(16, () => 0.02 * noise()), RATE)).toEqual([]);
+  });
+
+  it('ne s’applique pas quand une vraie explosion a déjà été trouvée', () => {
+    const track = signal(16, (t) => (t < 8 ? 0.05 * Math.sin(2 * Math.PI * 440 * t) : 0.5 * noise()));
+    expect(findExplosions(track, RATE)).toEqual(findExplosions(track, RATE, { sustained: false }));
+  });
+
+  it('un trou bref ne coupe pas l’explosion', () => {
+    const track = signal(16, (t) => (t >= 8 && t < 8.5 ? 0.02 : 0.5) * noise());
+    expect(findExplosions(track, RATE)).toHaveLength(1);
   });
 });
 
@@ -79,9 +103,9 @@ describe('findExplosions : drops répétés', () => {
     expect(found[0].end).toBeLessThan(15); // s’arrête au 1er trou
   });
 
-  it('n’en cherche pas tant qu’aucune explosion n’a eu lieu', () => {
+  it('ne cherche pas de drop répété tant qu’aucune explosion n’a eu lieu (repli désactivé)', () => {
     const track = signal(20, (t) => (t >= 9 && t < 9.6 ? 0.08 : 0.4) * noise());
-    expect(findExplosions(track, RATE)).toEqual([]);
+    expect(findExplosions(track, RATE, { sustained: false })).toEqual([]);
   });
 
   it('ne modifie jamais le début des explosions de la première passe, ni ne les raccourcit', () => {

@@ -41,6 +41,17 @@ export interface ExplosionOptions {
    */
   mergeShortGapS: number;
   mergeGapDb: number;
+  /**
+   * Extrait déjà « à fond » dès le début : sans historique, aucune hausse n'est visible. Si RIEN n'a
+   * été trouvé et que l'extrait est, dans son ensemble, dense (richesse médiane ≥ `sustainMinRichness`)
+   * et fort (volume médian ≥ `sustainMinLoudDb`, en dB RMS), les passages denses et forts de l'extrait
+   * comptent comme explosion (volume ≥ médiane − `sustainLevelDb`). Un morceau sobre, lui, n'a rien à
+   * détecter. `sustained: false` désactive ce repli.
+   */
+  sustained: boolean;
+  sustainMinRichness: number;
+  sustainMinLoudDb: number;
+  sustainLevelDb: number;
   /** On sort de l'explosion quand l'intensité retombe sous (niveau d'avant + cette marge). */
   exitMargin: number;
   /** Durée minimale d'une explosion (s). */
@@ -63,6 +74,10 @@ export const DEFAULT_EXPLOSION_OPTIONS: ExplosionOptions = {
   holdMinRichness: 0.65,
   mergeShortGapS: 1,
   mergeGapDb: 5,
+  sustained: true,
+  sustainMinRichness: 0.4,
+  sustainMinLoudDb: -18,
+  sustainLevelDb: 4,
   exitMargin: 2,
   minDurationS: 1,
   edgeS: 1.5,
@@ -186,7 +201,8 @@ export function findExplosions(
   const o = { ...DEFAULT_EXPLOSION_OPTIONS, ...options };
   const { intensity, richness } = intensityEnvelope(samples, sampleRate, o.windowS, o.richnessWeightDb);
   const base = findRises(intensity, richness, o);
-  if (o.holeDb <= 0 || base.length === 0) return base;
+  if (base.length === 0) return o.sustained ? findSustained(intensity, richness, o) : base;
+  if (o.holeDb <= 0) return base;
   const repeats = findRepeats(intensity, richness, o, base);
   return mergeRepeats(base, repeats, intensity, richness, o);
 }
@@ -231,6 +247,47 @@ function mergeRepeats(
       mean(richness, gapFrom, gapTo) >= o.holdMinRichness
     );
   }
+}
+
+const median = (values: number[]): number => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+
+/**
+ * Repli : un extrait qui démarre dans le passage fort n'a aucune hausse à montrer. Si, dans son
+ * ensemble, il est dense ET fort, ses passages denses et forts comptent comme explosion. Sinon (piano,
+ * voix posée, cordes…), il n'y a rien à détecter et on ne détecte rien.
+ */
+function findSustained(intensity: number[], richness: number[], o: ExplosionOptions): Explosion[] {
+  const edge = Math.round(o.edgeS / o.windowS);
+  const short = Math.max(1, Math.round(o.shortS / o.windowS));
+  const end = intensity.length - edge;
+  if (end - edge < short) return [];
+
+  // Le volume seul (sans la richesse, que `intensity` y ajoute).
+  const loud = intensity.map((v, i) => v - o.richnessWeightDb * richness[i]);
+  const medianLoud = median(loud.slice(edge, end));
+  if (median(richness.slice(edge, end)) < o.sustainMinRichness || medianLoud < o.sustainMinLoudDb) return [];
+
+  const strong: Explosion[] = [];
+  let start = -1;
+  for (let i = edge; i < end; i++) {
+    const from = Math.max(0, i - short + 1);
+    const ok = mean(richness, from, i + 1) >= o.minRichness && mean(loud, from, i + 1) >= medianLoud - o.sustainLevelDb;
+    if (ok && start < 0) start = Math.max(edge, from);
+    else if (!ok && start >= 0) {
+      strong.push({ start: start * o.windowS, end: i * o.windowS });
+      start = -1;
+    }
+  }
+  if (start >= 0) strong.push({ start: start * o.windowS, end: end * o.windowS });
+
+  // Un trou bref ne coupe pas une explosion ; une explosion trop courte n'en est pas une.
+  const merged: Explosion[] = [];
+  for (const e of strong) {
+    const last = merged[merged.length - 1];
+    if (last && e.start - last.end <= o.mergeShortGapS) last.end = e.end;
+    else merged.push({ ...e });
+  }
+  return merged.filter((e) => e.end - e.start >= o.minDurationS);
 }
 
 /** Première passe : une hausse nette par rapport à la moyenne des `longS` dernières secondes. */
