@@ -91,8 +91,10 @@ const marker = '  // new-day:insert';
 const line = `  ${n}: {
     component: () => import('./${slug}/${slug}').then((m) => m.default),
     readme: () => import('./${slug}/README.md').then((m) => m.default),
+    capture: { click: null, seconds: 10 },
   },
 `;
 writeFileSync(registry, readFileSync(registry, 'utf8').replace(marker, line + marker));
 
 console.log(`✔ days/${slug} créé et ajouté au routing → http://localhost:4200/${slug}`);
+console.log(`  GIF d'aperçu : règle « capture » dans days/registry.ts puis npm run gif -- ${n}`);

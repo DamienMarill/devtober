@@ -57,13 +57,41 @@ scripts/new-day.mjs     ← crée le dossier d'un jour
 npm run new-day -- 3     # ou sans argument pour le jour d'aujourd'hui
 ```
 
-Le script crée `days/day-03-bloom/` avec un composant de départ et un squelette de README, puis l'ajoute à `days/registry.ts`. Le jour passe en « Publié » sur l'accueil et devient accessible sur `/day-03-bloom`.
+Le script crée `days/day-03-bloom/` avec un composant de départ et un squelette de README, puis l'ajoute à `days/registry.ts` (avec un réglage de capture par défaut). Le jour passe en « Publié » sur l'accueil et devient accessible sur `/day-03-bloom`.
 
 Le composant reçoit toute la zone sous la barre de navigation (`size-full`). À toi de jouer.
 
 ### Documenter le jour
 
 Une fois le code écrit, demande à Claude Code « documente le jour 3 ». Le skill [`day-readme`](./.claude/skills/day-readme/SKILL.md) lit le code du dossier et rédige le README : l'idée, comment c'est codé, le lien avec le mot. Les liens relatifs vers les fichiers fonctionnent à la fois sur GitHub et dans la modale du site.
+
+### Le GIF d'aperçu
+
+```bash
+npm run gif -- 3              # preview.gif (README) et preview.mp4 (posts) dans days/day-03-bloom/
+npm run gif -- 3 --preview    # 3 s seulement, pour vérifier le clic et le cadrage (preview-test.gif, non versionné)
+npm run gif -- 3 --light      # GIF plus léger (~9 Mo au lieu de ~13 pour 30 s)
+```
+
+Le script construit l'app, ouvre la page `/capture/day-03-bloom` dans Chrome (Playwright), la filme, puis convertit la vidéo avec ffmpeg. Cette page est hors de la barre de navigation : elle affiche le jour dans un carré, avec en bas un bandeau (numéro et mot à gauche, logo Marill.dev à droite). Ouverte dans un navigateur, elle montre le même carré, pratique pour régler le clic.
+
+Chaque jour a un réglage `capture` dans [`days/registry.ts`](./days/registry.ts) (créé par `new-day`) :
+
+```ts
+capture: { click: { x: 307, y: 534 }, seconds: 30, settle: 3000 },
+```
+
+- `click` : où cliquer, en pixels dans le carré de 720 × 720, pour lancer l'animation. `null` si le jour démarre tout seul : on filme dès que la page est chargée.
+- `seconds` : la durée filmée, à partir du clic.
+- `settle` : l'attente (ms) avant de cliquer, le temps que le jour finisse de charger (1500 par défaut).
+
+Pour trouver les coordonnées d'un bouton, ouvre `/capture/day-03-bloom` en mode « appareil » 720 × 720 dans les outils de développement, ou mesure-le avec Playwright (`locator(...).boundingBox()`). Le registre est compilé dans l'app : après l'avoir modifié, relance sans `--skip-build`.
+
+Il faut Google Chrome et ffmpeg installés.
+
+**GIF ou MP4 ?** Pour 30 s d'animation, le GIF pèse ~13 Mo (400 px, 256 couleurs, 12 images/s) alors que le MP4 (720 px, pleine qualité) en pèse ~4 : c'est le format à envoyer sur X, LinkedIn ou Instagram. Le GIF sert à l'aperçu du README, où une vidéo ne s'affiche pas. Un GIF est lourd par nature sur ces scènes (fonds en dégradé, lueurs qui changent à chaque image) : avec moins de 128 couleurs, les dégradés se découpent en aplats. Pour l'alléger sans les abîmer, `--light` ; sinon `--fps 10`, `--width 360` ou `--colors 128`. `--dither bayer` lisse les dégradés mais double le poids. Le script débruite la vidéo avant la palette, ce qui allège le GIF sans changer son aspect.
+
+Si l'image reste figée pendant les dernières secondes (la musique s'est coupée, un réseau lent…), le script le signale : une capture ratée ne se voit sinon qu'à l'œil. Relance simplement la commande. `npm run gif` sans argument donne la liste des options.
 
 ## Développement
 

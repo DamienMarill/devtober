@@ -53,7 +53,7 @@ Une ou deux pistes d'amélioration, ou les ressources qui ont servi (liens exter
 - **Exact** : ne décris que ce que le code fait vraiment. Pas de fonctionnalité inventée, pas de chiffre de performance non mesuré.
 - **Liens relatifs** vers les fichiers du dossier (`./fichier.ts`). Dans la modale, ils sont réécrits automatiquement vers GitHub (et les images vers `raw.githubusercontent.com`), donc ils marchent aux deux endroits.
 - **Pas de HTML brut** dans le Markdown : la modale passe par le sanitizer d'Angular, qui retire scripts, styles et attributs non sûrs.
-- **Pas d'image qui n'existe pas** : n'inclus `![Aperçu](./preview.gif)` que si le fichier est dans le dossier. Sinon, indique à l'utilisateur qu'il peut en ajouter un pour le post #devtober.
+- **Pas d'image qui n'existe pas** : n'inclus `![Aperçu](./preview.gif)` que si le fichier est dans le dossier. Sinon, indique à l'utilisateur qu'il peut le générer avec `npm run gif -- <numéro>` (ou en ajouter un lui-même) pour le post #devtober.
 - Le titre H1 garde la forme `# Jour N : Mot`.
 
 ## Vérification

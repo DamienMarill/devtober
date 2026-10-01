@@ -1,17 +1,13 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
-import { SiteNav } from './layout/site-nav';
 
-/** Coque de l'app : barre de navigation fixe, puis la page (accueil ou jour) qui remplit le reste. */
+/**
+ * Racine de l'app : un simple point d'entrée du routage. La barre de navigation vit dans la coque
+ * (`layout/shell.ts`), ce qui laisse des pages entières, comme `/capture/<jour>`, hors de la coque.
+ */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, SiteNav],
-  host: { class: 'flex h-dvh flex-col' },
-  template: `
-    <app-site-nav />
-    <main class="relative min-h-0 flex-1 overflow-y-auto">
-      <router-outlet />
-    </main>
-  `,
+  imports: [RouterOutlet],
+  template: `<router-outlet />`,
 })
 export class App {}
