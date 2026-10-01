@@ -4,12 +4,14 @@ import {
   computed,
   DestroyRef,
   inject,
+  linkedSignal,
   resource,
   signal,
   viewChild,
 } from '@angular/core';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLoaderCircle, lucidePause, lucidePlay, lucideSearch } from '@ng-icons/lucide';
+import { CoverTheme, THEME_ROLES, themeFromCover } from './cover-theme';
 import { DeezerTrack, searchTracks } from './deezer';
 import { PulseAudio } from './pulse-audio';
 
@@ -25,7 +27,9 @@ function formatDuration(seconds: number): string {
   imports: [NgIcon],
   providers: [PulseAudio, provideIcons({ lucideLoaderCircle, lucidePause, lucidePlay, lucideSearch })],
   host: {
-    class: 'relative flex size-full flex-col items-center overflow-hidden px-4 py-6',
+    class:
+      'relative flex size-full flex-col items-center overflow-hidden px-4 py-6 transition-colors duration-700',
+    '[style.background-color]': 'background()',
     '(document:pointerdown)': 'onOutsidePointer($event)',
   },
   template: `
@@ -146,6 +150,44 @@ function formatDuration(seconds: number): string {
         </p>
       }
     </div>
+
+    <!-- Debug : thème généré depuis la pochette (à remplacer par l'application réelle au thème). -->
+    @if (theme.value(); as t) {
+      <aside
+        class="bg-background/80 border-border absolute right-3 bottom-3 z-30 max-h-[70dvh] w-60 max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-xl border p-3 text-xs shadow-xl backdrop-blur"
+        aria-label="Debug : thème généré"
+      >
+        <p class="text-muted-foreground mb-2 font-semibold tracking-wide uppercase">Debug · thème</p>
+        <div class="mb-3 flex items-center gap-1.5" title="Couleurs candidates (la 1re est la source)">
+          @for (c of t.candidates; track c; let i = $index) {
+            <span
+              class="size-7 rounded-full border border-white/20"
+              [class.ring-2]="i === 0"
+              [class.ring-white]="i === 0"
+              [style.background]="c"
+              [title]="c"
+            ></span>
+          }
+          <span class="text-muted-foreground ms-1 font-mono">{{ t.source }}</span>
+        </div>
+        <ul class="flex flex-col gap-1">
+          <li class="flex items-center gap-2">
+            <span class="size-5 shrink-0 rounded border border-white/20" [style.background]="t.backdrop"></span>
+            <span class="flex-1 truncate">backdrop (fond de page)</span>
+            <span class="text-muted-foreground font-mono">{{ t.backdrop }}</span>
+          </li>
+          @for (role of roles; track role) {
+            <li class="flex items-center gap-2">
+              <span class="size-5 shrink-0 rounded border border-white/20" [style.background]="t.roles[role]"></span>
+              <span class="flex-1 truncate">{{ role }}</span>
+              <span class="text-muted-foreground font-mono">{{ t.roles[role] }}</span>
+            </li>
+          }
+        </ul>
+      </aside>
+    } @else if (theme.error()) {
+      <p class="text-destructive absolute right-3 bottom-3 z-30 text-xs">Thème : {{ theme.error() }}</p>
+    }
   `,
 })
 export default class Day01Pulse {
@@ -164,6 +206,24 @@ export default class Day01Pulse {
     params: () => this.debounced().trim() || undefined,
     loader: ({ params, abortSignal }) => searchTracks(params, abortSignal),
   });
+
+  protected readonly roles = THEME_ROLES;
+
+  /** Thème Material You tiré de la pochette du morceau en cours. */
+  protected readonly theme = resource({
+    params: () => this.audio.current()?.album.cover_medium,
+    loader: ({ params, abortSignal }) => themeFromCover(params, abortSignal),
+  });
+
+  /** Dernier thème connu : pas de retour au fond par défaut le temps que le suivant se calcule. */
+  private readonly lastTheme = linkedSignal<CoverTheme | undefined, CoverTheme | undefined>({
+    source: () => this.theme.value(),
+    computation: (next, previous) => next ?? previous?.value,
+  });
+
+  protected readonly background = computed(
+    () => this.lastTheme()?.backdrop ?? 'var(--background)',
+  );
 
   protected readonly showList = computed(
     () => this.open() && this.debounced().trim() !== '' && !this.results.isLoading(),

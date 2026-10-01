@@ -6,7 +6,7 @@ export interface DeezerTrack {
   /** Durée du titre complet, en secondes. */
   duration: number;
   artist: { name: string };
-  album: { title: string; cover_small: string; cover_xl: string };
+  album: { title: string; cover_small: string; cover_medium: string; cover_xl: string };
 }
 
 const API_BASE_URL = 'https://api.deezer.com';

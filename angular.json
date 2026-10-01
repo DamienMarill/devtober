@@ -69,7 +69,7 @@
         },
         "test": {
           "builder": "@angular/build:unit-test",
-          "options": { "include": ["../days/**/*.spec.ts"] }
+          "options": { "include": ["../days/**/*.spec.ts"], "runnerConfig": "vitest.config.ts" }
         }
       }
     }
