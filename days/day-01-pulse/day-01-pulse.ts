@@ -13,13 +13,15 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLoaderCircle, lucidePause, lucidePlay, lucideSearch } from '@ng-icons/lucide';
-import { CoverTheme, THEME_ROLES, themeFromCover } from './cover-theme';
-import { DeezerTrack, searchTracks } from './deezer';
-import type { Explosion } from './explosion-detector';
-import { FireworksStage, burstSpec } from './fireworks-stage';
-import { PulseAudio } from './pulse-audio';
+import { CoverTheme, THEME_ROLES, themeFromCover } from './lib/cover-theme';
+import { DeezerTrack, getTrack, searchTracks } from './lib/deezer';
+import type { Explosion } from './lib/explosion-detector';
+import { FireworksStage, burstSpec } from './lib/fireworks-stage';
+import { PulseAudio } from './lib/pulse-audio';
 
 const DEBOUNCE_MS = 300;
+/** Titre proposé à l'arrivée : IRIS OUT, de Kenshi Yonezu (identifiant Deezer). */
+const DEFAULT_TRACK_ID = 3540533651;
 const ORB_MAX_OPACITY = 0.12;
 
 function formatDuration(seconds: number): string {
@@ -58,7 +60,7 @@ function formatDuration(seconds: number): string {
       <div class="relative">
         <ng-icon
           name="lucideSearch"
-          class="text-muted-foreground pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-lg"
+          class="text-muted-foreground pointer-events-none absolute start-4 top-1/2 z-10 -translate-y-1/2 text-lg"
         />
         <input
           type="search"
@@ -79,7 +81,7 @@ function formatDuration(seconds: number): string {
         @if (results.isLoading()) {
           <ng-icon
             name="lucideLoaderCircle"
-            class="text-muted-foreground absolute end-4 top-1/2 -translate-y-1/2 animate-spin text-lg"
+            class="text-muted-foreground absolute end-4 top-1/2 z-10 -translate-y-1/2 animate-spin text-lg"
           />
         }
       </div>
@@ -172,8 +174,8 @@ function formatDuration(seconds: number): string {
       }
     </div>
 
-    <!-- Debug : thème généré depuis la pochette (à remplacer par l'application réelle au thème). -->
-    @if (theme.value(); as t) {
+    <!-- Debug (caché ; ajouter ?debug à l'adresse pour l'afficher) : explosions et thème généré. -->
+    @if (debug && theme.value(); as t) {
       <aside
         class="bg-background/80 border-border absolute right-3 bottom-3 z-30 max-h-[70dvh] w-60 max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-xl border p-3 text-xs shadow-xl backdrop-blur"
         aria-label="Debug : thème généré"
@@ -231,7 +233,7 @@ function formatDuration(seconds: number): string {
           }
         </ul>
       </aside>
-    } @else if (theme.error()) {
+    } @else if (debug && theme.error()) {
       <p class="text-destructive absolute right-3 bottom-3 z-30 text-xs">Thème : {{ theme.error() }}</p>
     }
   `,
@@ -241,6 +243,9 @@ export default class Day01Pulse {
   private readonly search = viewChild.required<ElementRef<HTMLElement>>('search');
   private readonly fx = viewChild.required<ElementRef<HTMLCanvasElement>>('fx');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** Panneau de debug : caché, visible avec `?debug` dans l'adresse. */
+  protected readonly debug = new URLSearchParams(location.search).has('debug');
 
   protected readonly query = signal('');
   private readonly debounced = signal('');
@@ -310,6 +315,17 @@ export default class Day01Pulse {
   constructor() {
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(() => clearTimeout(this.timer));
+
+    // Un titre est déjà là à l'arrivée (pochette, thème, pré-analyse) : l'utilisateur n'a plus qu'à lancer la lecture.
+    const arrival = new AbortController();
+    destroyRef.onDestroy(() => arrival.abort());
+    getTrack(DEFAULT_TRACK_ID, arrival.signal)
+      .then((track) => {
+        if (this.audio.current()) return; // il a déjà choisi autre chose
+        this.audio.load(track);
+        this.query.set(`${track.title} · ${track.artist.name}`);
+      })
+      .catch(() => undefined); // sans titre par défaut, la page reste simplement vide
 
     afterNextRender(() => {
       const stage = new FireworksStage(this.fx().nativeElement);

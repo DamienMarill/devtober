@@ -103,6 +103,22 @@ export class PulseAudio implements OnDestroy {
     if (!track.preview) return;
     this.setupGraph();
     await this.ctx?.resume();
+    this.prepare(track);
+    await this.audio.play();
+    this.startLoop();
+  }
+
+  /**
+   * Prépare un titre sans le lire : le navigateur interdit de lancer du son sans geste de l'utilisateur,
+   * mais la pochette, le thème et la pré-analyse n'en ont pas besoin. Un clic sur lecture suffit ensuite.
+   */
+  load(track: DeezerTrack): void {
+    if (!track.preview) return;
+    this.setupGraph();
+    this.prepare(track);
+  }
+
+  private prepare(track: DeezerTrack): void {
     this.current.set(track);
     this.bandOnsets.reset();
     this.explosions.set([]);
@@ -113,8 +129,6 @@ export class PulseAudio implements OnDestroy {
       c.hasPrevious = false;
     });
     this.audio.src = track.preview;
-    await this.audio.play();
-    this.startLoop();
   }
 
   /**

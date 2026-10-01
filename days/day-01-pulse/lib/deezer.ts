@@ -76,3 +76,11 @@ export async function searchTracks(query: string, signal?: AbortSignal): Promise
   );
   return res.data ?? [];
 }
+
+/**
+ * Un titre précis. L'URL de l'extrait est signée et expire : on la redemande à chaque fois
+ * plutôt que de la garder.
+ */
+export function getTrack(id: number, signal?: AbortSignal): Promise<DeezerTrack> {
+  return jsonp<DeezerTrack>(`/track/${id}`, signal);
+}
