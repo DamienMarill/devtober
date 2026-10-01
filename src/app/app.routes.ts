@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { DAYS } from './days';
+import { PUBLISHED_DAYS, padDay } from './days';
 
 export const routes: Routes = [
   {
@@ -7,12 +7,11 @@ export const routes: Routes = [
     title: 'Devtober 2026',
     loadComponent: () => import('./home/home'),
   },
-  ...DAYS.filter((day) => day.load).map((day) => ({
+  ...PUBLISHED_DAYS.map((day) => ({
     path: day.slug,
-    title: `Devtober · ${day.number} ${day.word}`,
+    title: `Devtober · ${padDay(day.number)} ${day.word}`,
     data: { day: day.number },
-    loadComponent: () => import('./day-page/day-page'),
-    children: [{ path: '', loadComponent: day.load }],
+    loadComponent: day.entry!.component,
   })),
   { path: '**', redirectTo: '' },
 ];

@@ -74,29 +74,25 @@ writeFileSync(
   join(dir, 'README.md'),
   `# Jour ${n} : ${word}
 
-![aperçu](./preview.gif)
+<!-- Squelette : demande à Claude Code « documente le jour ${n} » (skill day-readme) pour le remplir à partir du code. -->
 
 ## L'idée
 
-<!-- Comment j'ai interprété le mot « ${word} » -->
-
-## Le code
-
-<!-- Ce qui se passe techniquement : structure, algo, astuces -->
+## Comment c'est codé
 
 ## Lien avec le mot
 
-<!-- En quoi la création colle au thème -->
-
-## Voir en ligne
-
-https://damienmarill.github.io/devtober/${slug}
+## Pour aller plus loin
 `,
 );
 
 const registry = join(daysDir, 'registry.ts');
 const marker = '  // new-day:insert';
-const line = `  ${n}: () => import('./${slug}/${slug}').then((m) => m.default),\n`;
+const line = `  ${n}: {
+    component: () => import('./${slug}/${slug}').then((m) => m.default),
+    readme: () => import('./${slug}/README.md').then((m) => m.default),
+  },
+`;
 writeFileSync(registry, readFileSync(registry, 'utf8').replace(marker, line + marker));
 
 console.log(`✔ days/${slug} créé et ajouté au routing → http://localhost:4200/${slug}`);

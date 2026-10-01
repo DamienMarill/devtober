@@ -4,85 +4,90 @@
 @import 'tailwindcss/utilities.css';
 
 @import '@spartan-ng/brain/hlm-tailwind-preset.css';
+@plugin '@tailwindcss/typography';
 @source '../days';
 @source '../libs';
-/* You can add global styles to this file, and also import other style files */
+
+/*
+ * Thème Marill.dev (« Sakura Night »), adapté aux variables de spartan-ng.
+ * Source : design system Marill.dev sur Claude Design (tokens/colors.css, typography.css, spacing.css).
+ * Deux mondes : clair (:root) et nuit (.dark, utilisé par défaut, cf. index.html).
+ */
+
+/* Couleurs de marque, exposées en utilitaires Tailwind (bg-night, text-blouge, from-hero-blue…) */
+@theme {
+  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+
+  --color-night: oklch(34.54% 0.199 267.97);
+  --color-deep-night: oklch(22.16% 0.144 264.2);
+  --color-night-floor: #0e0a35;
+  --color-hero-blue: #2127be;
+  --color-sky: oklch(77.47% 0.121 247.97);
+  --color-blouge: oklch(65.15% 0.188 277.48);
+  --color-peach: oklch(79.55% 0.163 68.76);
+  --color-sakura: oklch(83% 0.125 325);
+  --color-glow-pink: #ffcaec;
+  --color-glow-cyan: #92d9ff;
+}
 
 :root {
   color-scheme: light;
 
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
-    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-sans: 'Lato', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.21 0.006 285.885);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
+  /* Cartes 12px, boutons ~7px, badges ~5px (le preset spartan dérive les rayons de --radius) */
+  --radius: 8.5px;
+
+  /* Surfaces claires : page zinc-50, cartes blanches, titres deep-night */
+  --background: #fafafa;
+  --foreground: oklch(22.16% 0.144 264.2);
+  --card: #ffffff;
+  --card-foreground: #3f3f46;
+  --popover: #ffffff;
+  --popover-foreground: #3f3f46;
+  --primary: oklch(65.15% 0.188 277.48);
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #27272a;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #27272a;
+  --destructive: #ef4444;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: oklch(65.15% 0.188 277.48);
+
+  --chart-1: oklch(65.15% 0.188 277.48);
+  --chart-2: oklch(77.47% 0.121 247.97);
+  --chart-3: oklch(79.55% 0.163 68.76);
+  --chart-4: oklch(74% 0.178 325);
+  --chart-5: oklch(34.54% 0.199 267.97);
 }
 
 :root.dark {
   color-scheme: dark;
 
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  /* Surfaces nuit : fond night-floor, cartes translucides (white/10), accent blouge */
+  --background: #0e0a35;
+  --foreground: #ffffff;
+  --card: oklch(1 0 0 / 7%);
+  --card-foreground: #d4d4d8;
+  --popover: oklch(22.16% 0.144 264.2);
+  --popover-foreground: #d4d4d8;
+  --primary: oklch(65.15% 0.188 277.48);
+  --primary-foreground: #fafafa;
+  --secondary: oklch(1 0 0 / 10%);
+  --secondary-foreground: #ffffff;
+  --muted: oklch(1 0 0 / 8%);
+  --muted-foreground: #a1a1aa;
+  --accent: oklch(1 0 0 / 10%);
+  --accent-foreground: #ffffff;
+  --destructive: #f87171;
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.552 0.016 285.938);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.985 0 0);
-  --sidebar-primary-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
+  --ring: oklch(65.15% 0.188 277.48);
 }
 
 @layer base {
@@ -90,6 +95,42 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    text-wrap: pretty;
+  }
+}
+
+/* Contenu des README dans la modale (plugin typography, aux couleurs du thème) */
+.prose-readme {
+  --tw-prose-body: var(--popover-foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted-foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: var(--muted-foreground);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--foreground);
+  --tw-prose-quote-borders: var(--primary);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-code: var(--color-sakura);
+  --tw-prose-pre-code: #e4e4e7;
+  --tw-prose-pre-bg: oklch(0 0 0 / 35%);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+
+  font-size: 0.95rem;
+
+  :where(h1, h2, h3) {
+    font-family: var(--font-display);
+  }
+  :where(img) {
+    border-radius: var(--radius-lg);
   }
 }

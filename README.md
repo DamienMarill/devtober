@@ -1,40 +1,55 @@
 # Devtober 2026
 
-Un mot par jour pendant tout octobre, une création en code inspirée du mot. Ça se passe sur **[damienmarill.github.io/devtober](https://damienmarill.github.io/devtober/)**.
+Un mot par jour pendant tout octobre, une création en code inspirée du mot. Le résultat est en ligne sur **[damienmarill.github.io/devtober](https://damienmarill.github.io/devtober/)**.
 
-Stack : Angular 22 (standalone, signals), Tailwind CSS 4 et [spartan-ng](https://spartan.ng) pour l'UI de la page d'accueil.
+## Le principe, version Angular
 
-## Les jours
+La règle du Devtober demande un dossier par jour avec un README. Ici, tout le mois est **une seule application Angular** : chaque jour est un **composant Angular** dans son propre dossier, chargé à la demande quand on ouvre sa page. On garde donc l'esprit de la règle (un dossier + un README par jour), mais tout est navigable depuis un même site.
 
-| # | Mot | | # | Mot | | # | Mot |
-|---|-----|-|---|-----|-|---|-----|
-| 01 | Pulse | | 12 | Lost | | 23 | Spark |
-| 02 | Loop | | 13 | Tangle | | 24 | Hidden |
-| 03 | Bloom | | 14 | Bounce | | 25 | Melt |
-| 04 | Drift | | 15 | Shadow | | 26 | Machine |
-| 05 | Chaos | | 16 | Tide | | 27 | Haunted |
-| 06 | Tiny | | 17 | Orbit | | 28 | Grow |
-| 07 | Swarm | | 18 | Glitch | | 29 | Infinite |
-| 08 | Maze | | 19 | Echo | | 30 | Collapse |
-| 09 | Gravity | | 20 | Fragile | | 31 | Wake |
-| 10 | Fold | | 21 | Signal | | | |
-| 11 | Ripple | | 22 | Mirror | | | |
+- La page d'accueil affiche les 31 mots et l'état de chaque jour (publié, aujourd'hui, à venir).
+- Chaque jour a sa page, `/day-XX-mot`, où la création occupe tout l'écran sous la barre de navigation.
+- La barre de navigation est commune à toutes les pages : fil d'Ariane, accès au jour précédent et au jour suivant, et une icône livre en haut à droite qui ouvre le README du jour dans une modale.
 
-Chaque création vit dans son dossier `days/day-XX-mot/`, avec un README qui explique le code et le lien au mot.
+## Où sont les créations ?
 
-## Structure
+**Dans [`days/`](./days)**, un dossier par jour :
 
 ```
 days/
-  day-01-pulse/        ← un dossier par jour : composant + README
-  registry.ts          ← jours publiés, branchés sur le routing (lazy-loading)
-src/app/
-  home/                ← page d'accueil : grille des 31 jours
-  day-page/            ← cadre commun d'une page de jour (nav, lien README)
-  days.ts              ← liste des mots, dates et statuts
-libs/ui/               ← composants spartan-ng (helm) générés
-scripts/new-day.mjs    ← crée le dossier d'un jour
+  day-01-pulse/
+    day-01-pulse.ts     ← le composant du jour (canvas, SVG, WebGL… au choix)
+    README.md           ← ce que fait le code et le lien avec le mot
+    preview.gif         ← (optionnel) l'aperçu à poster avec #devtober
+  registry.ts           ← liste des jours publiés, branchée sur le routing
 ```
+
+Le reste du repo, c'est le cadre commun :
+
+```
+src/app/
+  home/                 ← page d'accueil : grille des 31 jours
+  layout/               ← barre de navigation, fil d'Ariane, modale README
+  days.ts               ← mots, dates et statut de chaque jour
+libs/ui/                ← composants spartan-ng (helm) utilisés par le cadre
+scripts/new-day.mjs     ← crée le dossier d'un jour
+.claude/skills/         ← skill Claude Code qui rédige le README d'un jour
+```
+
+## Les mots
+
+| #   | Mot     |     | #   | Mot     |     | #   | Mot      |
+| --- | ------- | --- | --- | ------- | --- | --- | -------- |
+| 01  | Pulse   |     | 12  | Lost    |     | 23  | Spark    |
+| 02  | Loop    |     | 13  | Tangle  |     | 24  | Hidden   |
+| 03  | Bloom   |     | 14  | Bounce  |     | 25  | Melt     |
+| 04  | Drift   |     | 15  | Shadow  |     | 26  | Machine  |
+| 05  | Chaos   |     | 16  | Tide    |     | 27  | Haunted  |
+| 06  | Tiny    |     | 17  | Orbit   |     | 28  | Grow     |
+| 07  | Swarm   |     | 18  | Glitch  |     | 29  | Infinite |
+| 08  | Maze    |     | 19  | Echo    |     | 30  | Collapse |
+| 09  | Gravity |     | 20  | Fragile |     | 31  | Wake     |
+| 10  | Fold    |     | 21  | Signal  |     |     |          |
+| 11  | Ripple  |     | 22  | Mirror  |     |     |          |
 
 ## Ajouter un jour
 
@@ -42,9 +57,13 @@ scripts/new-day.mjs    ← crée le dossier d'un jour
 npm run new-day -- 3     # ou sans argument pour le jour d'aujourd'hui
 ```
 
-Le script crée `days/day-03-bloom/` (composant + README à compléter) et l'ajoute au routing. Le jour passe en « Publié » sur la page d'accueil et devient accessible sur `/day-03-bloom`.
+Le script crée `days/day-03-bloom/` avec un composant de départ et un squelette de README, puis l'ajoute à `days/registry.ts`. Le jour passe en « Publié » sur l'accueil et devient accessible sur `/day-03-bloom`.
 
-Le composant prend toute la zone sous la barre de navigation : canvas, SVG, Three.js, ce que tu veux.
+Le composant reçoit toute la zone sous la barre de navigation (`size-full`). À toi de jouer.
+
+### Documenter le jour
+
+Une fois le code écrit, demande à Claude Code « documente le jour 3 ». Le skill [`day-readme`](./.claude/skills/day-readme/SKILL.md) lit le code du dossier et rédige le README : l'idée, comment c'est codé, le lien avec le mot. Les liens relatifs vers les fichiers fonctionnent à la fois sur GitHub et dans la modale du site.
 
 ## Développement
 
@@ -56,8 +75,15 @@ npm run build:pages      # build de prod tel que déployé sur GitHub Pages
 
 Node 22.22.3+ ou 24 (voir `.nvmrc`).
 
-Ajouter un composant spartan-ng : `npx ng g @spartan-ng/cli:ui <nom>`.
+## Stack et design
+
+- **Angular 22** (composants standalone, signals) et **Tailwind CSS 4**.
+- **[spartan-ng](https://spartan.ng)** pour l'interface du cadre : cartes et badges de l'accueil, fil d'Ariane, tooltips, modale. Ajouter un composant : `npx ng g @spartan-ng/cli:ui <nom>`.
+- **[marked](https://marked.js.org)** convertit les README en HTML dans la modale. Il n'est chargé qu'à la première ouverture.
+- Le thème reprend le design system **Marill.dev** (« Sakura Night ») : fond nuit `#0E0A35`, accent périwinkle, titres en Bricolage Grotesque, texte en Lato. Les variables sont dans [`src/styles.css`](./src/styles.css).
+
+Les créations de chaque jour sont libres : elles n'ont pas à utiliser spartan ni le thème.
 
 ## Déploiement
 
-Chaque push sur `main` build et déploie sur GitHub Pages via `.github/workflows/deploy.yml`. Le build utilise `--base-href /devtober/` et copie `index.html` en `404.html` pour que les liens directs vers un jour fonctionnent.
+Chaque push sur `main` lance le build et le déploiement sur GitHub Pages via [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml). Le build utilise `--base-href /devtober/` et copie `index.html` en `404.html` pour que les liens directs vers un jour fonctionnent.
