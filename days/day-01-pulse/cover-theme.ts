@@ -38,11 +38,28 @@ export type ThemeRole = (typeof THEME_ROLES)[number];
 const BACKDROP_TONE = 2;
 const BACKDROP_CHROMA = 7;
 
+/**
+ * Les gerbes s'additionnent à la lumière : une candidate sombre s'éteindrait
+ * sur le fond. On relève donc leur luminosité (et leur couleur, si elles en ont)
+ * sans toucher à leur teinte.
+ */
+const FIREWORK_MIN_TONE = 70;
+const FIREWORK_MIN_CHROMA = 36;
+
+function fireworkColor(argb: number): string {
+  const { hue, chroma, tone } = Hct.fromInt(argb);
+  // Un quasi-gris n'a pas de vraie teinte : on le laisse blanc cassé plutôt que de l'inventer.
+  const c = chroma < 8 ? chroma : Math.max(chroma, FIREWORK_MIN_CHROMA);
+  return hexFromArgb(Hct.from(hue, c, Math.max(tone, FIREWORK_MIN_TONE)).toInt());
+}
+
 export interface CoverTheme {
   /** Couleurs candidates tirées de la pochette, de la plus adaptée à la moins adaptée. */
   candidates: string[];
   /** Couleur source retenue (la meilleure candidate). */
   source: string;
+  /** Les candidates, éclaircies pour rester visibles en additif sur le fond sombre : couleurs des feux d'artifice. */
+  fireworkColors: string[];
   /** Fond de page sombre à la teinte de la pochette. */
   backdrop: string;
   /** Rôles du thème sombre, en hexadécimal. */
@@ -81,6 +98,7 @@ export function themeFromPixels(rgba: Uint8ClampedArray): CoverTheme {
   );
   return {
     candidates: ranked.map(hexFromArgb),
+    fireworkColors: ranked.map(fireworkColor),
     source: hexFromArgb(source),
     backdrop: hexFromArgb(backdrop),
     roles,

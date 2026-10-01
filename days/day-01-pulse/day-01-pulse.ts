@@ -1,4 +1,5 @@
 import {
+  afterNextRender,
   Component,
   ElementRef,
   computed,
@@ -9,10 +10,13 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLoaderCircle, lucidePause, lucidePlay, lucideSearch } from '@ng-icons/lucide';
 import { CoverTheme, THEME_ROLES, themeFromCover } from './cover-theme';
 import { DeezerTrack, searchTracks } from './deezer';
+import type { Explosion } from './explosion-detector';
+import { FireworksStage, burstSpec } from './fireworks-stage';
 import { PulseAudio } from './pulse-audio';
 
 const DEBOUNCE_MS = 300;
@@ -46,6 +50,9 @@ function formatDuration(seconds: number): string {
         ></div>
       }
     </div>
+
+    <!-- Feux d'artifice : explosions seules, déclenchées pendant les « explosions musicales ». -->
+    <canvas #fx aria-hidden="true" class="pointer-events-none absolute inset-0 z-[15] size-full"></canvas>
 
     <div #search class="relative z-20 w-full max-w-xl">
       <div class="relative">
@@ -171,6 +178,31 @@ function formatDuration(seconds: number): string {
         class="bg-background/80 border-border absolute right-3 bottom-3 z-30 max-h-[70dvh] w-60 max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-xl border p-3 text-xs shadow-xl backdrop-blur"
         aria-label="Debug : thème généré"
       >
+        <p class="text-muted-foreground mb-2 font-semibold tracking-wide uppercase">Debug · explosions</p>
+        <div class="mb-3 flex flex-col gap-1">
+          <p>
+            passages :
+            @for (e of audio.explosions(); track e.start; let last = $last) {
+              <span class="font-mono">{{ span(e) }}{{ last ? '' : ' · ' }}</span>
+            } @empty {
+              <span class="text-muted-foreground">aucun détecté</span>
+            }
+          </p>
+          <p>
+            état :
+            <span [class.text-primary]="audio.exploding()" class="font-semibold">
+              {{ audio.exploding() ? 'EXPLOSION' : 'calme' }}
+            </span>
+          </p>
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              [checked]="audio.forceExplosion()"
+              (change)="audio.forceExplosion.set($any($event.target).checked)"
+            />
+            forcer les feux d'artifice
+          </label>
+        </div>
         <p class="text-muted-foreground mb-2 font-semibold tracking-wide uppercase">Debug · thème</p>
         <div class="mb-3 flex items-center gap-1.5" title="Couleurs candidates (la 1re est la source)">
           @for (c of t.candidates; track c; let i = $index) {
@@ -207,6 +239,8 @@ function formatDuration(seconds: number): string {
 export default class Day01Pulse {
   protected readonly audio = inject(PulseAudio);
   private readonly search = viewChild.required<ElementRef<HTMLElement>>('search');
+  private readonly fx = viewChild.required<ElementRef<HTMLCanvasElement>>('fx');
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly query = signal('');
   private readonly debounced = signal('');
@@ -274,8 +308,30 @@ export default class Day01Pulse {
   private timer?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => clearTimeout(this.timer));
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => clearTimeout(this.timer));
+
+    afterNextRender(() => {
+      const stage = new FireworksStage(this.fx().nativeElement);
+      const element = this.host.nativeElement;
+      const fit = () => stage.resize(element.clientWidth, element.clientHeight);
+      fit();
+      const observer = new ResizeObserver(fit);
+      observer.observe(element);
+      destroyRef.onDestroy(() => {
+        observer.disconnect();
+        stage.destroy();
+      });
+
+      this.audio.bursts.pipe(takeUntilDestroyed(destroyRef)).subscribe((burst) => {
+        if (this.reducedMotion) return;
+        const colors = this.lastTheme()?.fireworkColors ?? [];
+        stage.burst(burstSpec(burst, stage.width, stage.height, colors));
+      });
+    });
   }
+
+  protected span = (e: Explosion): string => `${e.start.toFixed(1)}–${e.end.toFixed(1)} s`;
 
   protected duration = formatDuration;
 

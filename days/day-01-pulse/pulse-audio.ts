@@ -1,5 +1,8 @@
 import { Injectable, OnDestroy, signal } from '@angular/core';
+import { Subject } from 'rxjs';
+import { BandBurst, BandOnsets } from './band-onsets';
 import type { DeezerTrack } from './deezer';
+import { Explosion, findExplosions, isExploding } from './explosion-detector';
 import {
   KICK_OPTIONS,
   OnsetDetector,
@@ -71,8 +74,19 @@ export class PulseAudio implements OnDestroy {
   private ctx?: AudioContext;
   private analyser?: AnalyserNode;
   private bins?: Uint8Array<ArrayBuffer>;
+  /** Passages où le morceau « explose », trouvés par pré-analyse de l'extrait. */
+  readonly explosions = signal<Explosion[]>([]);
+  /** Vrai quand la lecture est dans un de ces passages (ou qu'on le force pour tester). */
+  readonly exploding = signal(false);
+  /** Forcer l'état « explosion » (réglage de debug) pour voir les gerbes sur n'importe quel morceau. */
+  readonly forceExplosion = signal(false);
+  /** Attaques par bande de fréquences, avec leur position stéréo, émises pendant une explosion. */
+  readonly bursts = new Subject<BandBurst>();
+
   /** [gauche, droite] */
   private bass: BassChannel[] = [];
+  private readonly bandOnsets = new BandOnsets(BASS_FFT_SIZE / 2);
+  private analysisToken = 0;
   private frame = 0;
   private lastTime = 0;
 
@@ -90,6 +104,9 @@ export class PulseAudio implements OnDestroy {
     this.setupGraph();
     await this.ctx?.resume();
     this.current.set(track);
+    this.bandOnsets.reset();
+    this.explosions.set([]);
+    void this.analyse(track.preview);
     this.bass.forEach((c) => {
       c.kick.reset();
       c.percussion.reset();
@@ -98,6 +115,28 @@ export class PulseAudio implements OnDestroy {
     this.audio.src = track.preview;
     await this.audio.play();
     this.startLoop();
+  }
+
+  /**
+   * Pré-analyse : on télécharge et décode l'extrait en entier pour repérer ses
+   * explosions à l'avance, avec tout l'historique nécessaire (le temps réel ne
+   * permet pas de comparer à ce qui précède dès les premières secondes).
+   */
+  private async analyse(url: string): Promise<void> {
+    const token = ++this.analysisToken;
+    try {
+      const response = await fetch(url, { mode: 'cors' });
+      const decoded = await this.ctx!.decodeAudioData(await response.arrayBuffer());
+      if (token !== this.analysisToken) return; // un autre morceau a été choisi entre-temps
+      const mono = new Float32Array(decoded.length);
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        const data = decoded.getChannelData(c);
+        for (let i = 0; i < mono.length; i++) mono[i] += data[i] / decoded.numberOfChannels;
+      }
+      this.explosions.set(findExplosions(mono, decoded.sampleRate));
+    } catch (error) {
+      console.warn('Analyse des explosions impossible', error);
+    }
   }
 
   async toggle(): Promise<void> {
@@ -122,6 +161,8 @@ export class PulseAudio implements OnDestroy {
     this.audio.pause();
     this.audio.removeAttribute('src');
     cancelAnimationFrame(this.frame);
+    this.analysisToken++;
+    this.bursts.complete();
     void this.ctx?.close();
   }
 
@@ -190,6 +231,13 @@ export class PulseAudio implements OnDestroy {
         channel.hasPrevious = true;
         return Math.max(kick, perc * PERCUSSION_WEIGHT);
       });
+      if (this.bass.length === 2) {
+        const exploding = this.forceExplosion() || isExploding(this.explosions(), this.audio.currentTime);
+        if (exploding !== this.exploding()) this.exploding.set(exploding);
+        // Le détecteur tourne en permanence (son niveau récent doit rester à jour) ; on n'émet que pendant l'explosion.
+        const found = this.bandOnsets.next(this.bass[0].bins, this.bass[1].bins, rate, BASS_FFT_SIZE, dt);
+        if (exploding) found.forEach((b) => this.bursts.next(b));
+      }
       if (flashes.length === 2) {
         this.flashLeft.set(flashes[0]);
         this.flashRight.set(flashes[1]);
@@ -204,5 +252,6 @@ export class PulseAudio implements OnDestroy {
     this.level.set(0);
     this.flashLeft.set(0);
     this.flashRight.set(0);
+    this.exploding.set(false);
   }
 }

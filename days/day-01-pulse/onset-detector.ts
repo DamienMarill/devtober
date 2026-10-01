@@ -112,6 +112,8 @@ export class OnsetDetector {
   private flash = 0;
   private sinceTrigger = Infinity;
   private primed = false;
+  /** Vrai si la dernière mesure a déclenché une nouvelle attaque (et pas seulement prolongé un flash). */
+  triggered = false;
 
   constructor(private readonly opts: OnsetOptions = KICK_OPTIONS) {}
 
@@ -122,6 +124,7 @@ export class OnsetDetector {
       this.avg = energy;
       this.primed = true;
     }
+    this.triggered = false;
     this.sinceTrigger += dtMs;
     this.flash *= Math.exp(-dtMs / decayMs);
 
@@ -129,6 +132,7 @@ export class OnsetDetector {
     if (energy >= minEnergy && rise >= minRise && this.sinceTrigger >= refractoryMs) {
       this.flash = Math.max(this.flash, Math.min(1, 0.5 + rise));
       this.sinceTrigger = 0;
+      this.triggered = true;
     }
     // Le niveau récent se met à jour après la détection, sinon le coup s'annulerait lui-même.
     this.avg += (energy - this.avg) * (1 - Math.exp(-dtMs / avgMs));
@@ -138,6 +142,7 @@ export class OnsetDetector {
   reset(): void {
     this.primed = false;
     this.flash = 0;
+    this.triggered = false;
     this.sinceTrigger = Infinity;
   }
 }
