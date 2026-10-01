@@ -68,9 +68,10 @@ Une fois le code écrit, demande à Claude Code « documente le jour 3 ». Le sk
 ### Le GIF d'aperçu
 
 ```bash
-npm run gif -- 3              # preview.gif (README) et preview.mp4 (posts) dans days/day-03-bloom/
+npm run gif -- 3              # preview.gif (README), preview.mp4 (posts) et preview-embed.gif (liens partagés)
 npm run gif -- 3 --preview    # 3 s seulement, pour vérifier le clic et le cadrage (preview-test.gif, non versionné)
 npm run gif -- 3 --light      # GIF plus léger (~9 Mo au lieu de ~13 pour 30 s)
+npm run gif -- 3 --embed-only # refait seulement preview-embed.gif, depuis le MP4 existant (sans refilmer)
 ```
 
 Le script construit l'app, ouvre la page `/capture/day-03-bloom` dans Chrome (Playwright), la filme, puis convertit la vidéo avec ffmpeg. Cette page est hors de la barre de navigation : elle affiche le jour dans un carré, avec en bas un bandeau (numéro et mot à gauche, logo Marill.dev à droite). Ouverte dans un navigateur, elle montre le même carré, pratique pour régler le clic.
@@ -92,6 +93,14 @@ Il faut Google Chrome et ffmpeg installés.
 **GIF ou MP4 ?** Pour 30 s d'animation, le GIF pèse ~13 Mo (400 px, 256 couleurs, 12 images/s) alors que le MP4 (720 px, pleine qualité) en pèse ~4 : c'est le format à envoyer sur X, LinkedIn ou Instagram. Le GIF sert à l'aperçu du README, où une vidéo ne s'affiche pas. Un GIF est lourd par nature sur ces scènes (fonds en dégradé, lueurs qui changent à chaque image) : avec moins de 128 couleurs, les dégradés se découpent en aplats. Pour l'alléger sans les abîmer, `--light` ; sinon `--fps 10`, `--width 360` ou `--colors 128`. `--dither bayer` lisse les dégradés mais double le poids. Le script débruite la vidéo avant la palette, ce qui allège le GIF sans changer son aspect.
 
 Si l'image reste figée pendant les dernières secondes (la musique s'est coupée, un réseau lent…), le script le signale : une capture ratée ne se voit sinon qu'à l'œil. Relance simplement la commande. `npm run gif` sans argument donne la liste des options.
+
+### L'aperçu des liens partagés
+
+Quand on partage le lien d'un jour (`/day-03-bloom/`), les réseaux affichent son `preview-embed.gif`. `npm run build:pages` écrit pour chaque jour une page HTML statique avec ses balises de partage (Open Graph, X) : le titre, la description (le premier paragraphe du README) et l'image. C'est nécessaire parce que les robots des réseaux n'exécutent pas le JavaScript d'Angular : sans ça, tous les liens afficheraient le même aperçu. Le script est [`scripts/social-pages.mjs`](./scripts/social-pages.mjs). Un jour sans `preview-embed.gif` a ses balises de titre et de description, mais pas d'image. L'accueil a des balises génériques, sans image.
+
+Cette image est à part du `preview.gif` du README, pour une raison de poids : X, LinkedIn et Slack ignorent une image de plus de 5 Mo (8 Mo pour Facebook et Discord), et un GIF de 30 s en fait ~13. `npm run gif` prend donc la fenêtre la plus animée du clip (12 s par défaut, 360 px) et la raccourcit jusqu'à passer sous 4,5 Mo. X et LinkedIn n'affichent que sa **première image**, qui montre ainsi l'action et non le début calme du clip ; Facebook et Discord jouent l'animation. Le carré n'est pas recadré : la carte X est de type `summary`, qui accepte le 1:1.
+
+Les réseaux mettent les aperçus en cache : après un déploiement, ils peuvent montrer l'ancien jusqu'à ce qu'on force la relecture (Facebook Sharing Debugger, LinkedIn Post Inspector).
 
 ## Développement
 
