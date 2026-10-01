@@ -16,6 +16,7 @@ import { DeezerTrack, searchTracks } from './deezer';
 import { PulseAudio } from './pulse-audio';
 
 const DEBOUNCE_MS = 300;
+const ORB_MAX_OPACITY = 0.12;
 
 function formatDuration(seconds: number): string {
   const s = String(seconds % 60).padStart(2, '0');
@@ -33,6 +34,19 @@ function formatDuration(seconds: number): string {
     '(document:pointerdown)': 'onOutsidePointer($event)',
   },
   template: `
+    <!-- Deux orbes géantes centrées sur les bords gauche et droit, rayon = largeur de la page.
+         Chacune flashe sur les grosses caisses et percussions de son canal stéréo. -->
+    <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-0">
+      @for (orb of orbs; track orb.left) {
+        <div
+          class="absolute top-1/2 aspect-square w-[200%] -translate-x-1/2 -translate-y-1/2 rounded-full will-change-[opacity]"
+          [style.left]="orb.left"
+          [style.background]="orbBackground()"
+          [style.opacity]="orbOpacity(orb.kick())"
+        ></div>
+      }
+    </div>
+
     <div #search class="relative z-20 w-full max-w-xl">
       <div class="relative">
         <ng-icon
@@ -224,6 +238,22 @@ export default class Day01Pulse {
   protected readonly background = computed(
     () => this.lastTheme()?.backdrop ?? 'var(--background)',
   );
+
+  /** Chaque orbe suit son canal : gauche sur le bord gauche, droite sur le bord droit. */
+  protected readonly orbs = [
+    { left: '0%', kick: this.audio.flashLeft },
+    { left: '100%', kick: this.audio.flashRight },
+  ];
+  private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /** Couleur on-surface du thème, en halo qui s'estompe vers les bords. */
+  protected readonly orbBackground = computed(
+    () => `radial-gradient(closest-side, ${this.lastTheme()?.roles.onSurface ?? 'transparent'}, transparent)`,
+  );
+  /** Plafonné : on-surface est très clair, un flash plein écran serait agressif. */
+  protected orbOpacity(kick: number): number {
+    return this.reducedMotion ? 0 : kick * ORB_MAX_OPACITY;
+  }
 
   protected readonly showList = computed(
     () => this.open() && this.debounced().trim() !== '' && !this.results.isLoading(),
