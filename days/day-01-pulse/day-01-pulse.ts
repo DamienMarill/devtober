@@ -1,8 +1,237 @@
-import { Component } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  DestroyRef,
+  inject,
+  resource,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideLoaderCircle, lucidePause, lucidePlay, lucideSearch } from '@ng-icons/lucide';
+import { DeezerTrack, searchTracks } from './deezer';
+import { PulseAudio } from './pulse-audio';
+
+const DEBOUNCE_MS = 300;
+
+function formatDuration(seconds: number): string {
+  const s = String(seconds % 60).padStart(2, '0');
+  return `${Math.floor(seconds / 60)}:${s}`;
+}
 
 @Component({
   selector: 'app-day-01-pulse',
-  host: { class: 'grid size-full place-items-center' },
-  template: `<p class="text-muted-foreground text-2xl">Pulse</p>`,
+  imports: [NgIcon],
+  providers: [PulseAudio, provideIcons({ lucideLoaderCircle, lucidePause, lucidePlay, lucideSearch })],
+  host: {
+    class: 'relative flex size-full flex-col items-center overflow-hidden px-4 py-6',
+    '(document:pointerdown)': 'onOutsidePointer($event)',
+  },
+  template: `
+    <div #search class="relative z-20 w-full max-w-xl">
+      <div class="relative">
+        <ng-icon
+          name="lucideSearch"
+          class="text-muted-foreground pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-lg"
+        />
+        <input
+          type="search"
+          role="combobox"
+          aria-label="Rechercher un morceau"
+          aria-autocomplete="list"
+          aria-controls="pulse-results"
+          [attr.aria-expanded]="showList()"
+          [attr.aria-activedescendant]="showList() && active() >= 0 ? 'pulse-opt-' + active() : null"
+          autocomplete="off"
+          placeholder="Rechercher un morceau, un artiste…"
+          class="border-border bg-card/80 placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/40 h-12 w-full rounded-full border ps-11 pe-11 text-base backdrop-blur outline-none focus-visible:ring-4"
+          [value]="query()"
+          (input)="onInput($any($event.target).value)"
+          (focus)="open.set(true)"
+          (keydown)="onKeydown($event)"
+        />
+        @if (results.isLoading()) {
+          <ng-icon
+            name="lucideLoaderCircle"
+            class="text-muted-foreground absolute end-4 top-1/2 -translate-y-1/2 animate-spin text-lg"
+          />
+        }
+      </div>
+
+      @if (showList()) {
+        <ul
+          id="pulse-results"
+          role="listbox"
+          class="border-border bg-popover/95 absolute inset-x-0 top-14 max-h-[60dvh] overflow-y-auto rounded-2xl border p-1.5 shadow-2xl backdrop-blur-xl"
+        >
+          @if (results.error()) {
+            <li class="text-destructive px-3 py-3 text-sm">
+              {{ errorMessage() }}
+            </li>
+          } @else if (results.hasValue() && results.value().length === 0) {
+            <li class="text-muted-foreground px-3 py-3 text-sm">Aucun résultat.</li>
+          }
+          @for (track of results.value() ?? []; track track.id; let i = $index) {
+            <li
+              role="option"
+              [id]="'pulse-opt-' + i"
+              [attr.aria-selected]="i === active()"
+              [attr.aria-disabled]="!track.preview"
+              class="flex items-center gap-3 rounded-xl p-2 transition-colors"
+              [class.bg-accent]="i === active()"
+              [class.cursor-pointer]="track.preview"
+              [class.opacity-40]="!track.preview"
+              [title]="track.preview ? '' : 'Pas d’extrait disponible'"
+              (pointerenter)="active.set(i)"
+              (click)="select(track)"
+            >
+              <img
+                [src]="track.album.cover_small"
+                [alt]="'Pochette de ' + track.album.title"
+                width="40"
+                height="40"
+                class="size-10 shrink-0 rounded-md object-cover"
+              />
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium">{{ track.title }}</span>
+                <span class="text-muted-foreground block truncate text-xs">{{ track.artist.name }}</span>
+              </span>
+              <span class="text-muted-foreground shrink-0 text-xs tabular-nums">
+                {{ duration(track.duration) }}
+              </span>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    <div class="relative z-10 flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-8">
+      @if (audio.current(); as track) {
+        <div class="relative size-[min(56vmin,20.8rem)]">
+          <!-- Lueur : la pochette elle-même, floutée, qui enfle et s'éclaire sur les basses. -->
+          <img
+            aria-hidden="true"
+            [src]="track.album.cover_xl"
+            alt=""
+            class="absolute inset-0 size-full rounded-3xl object-cover blur-3xl will-change-transform"
+            [style.opacity]="glowOpacity()"
+            [style.transform]="glowTransform()"
+          />
+          <img
+            [src]="track.album.cover_xl"
+            [alt]="'Pochette de ' + track.album.title"
+            class="relative size-full rounded-2xl object-cover shadow-2xl will-change-transform"
+            [style.transform]="coverTransform()"
+          />
+        </div>
+
+        <div class="flex max-w-full items-center gap-4">
+          <button
+            type="button"
+            class="border-border bg-card/80 hover:bg-accent inline-flex size-12 shrink-0 items-center justify-center rounded-full border backdrop-blur transition-colors"
+            [attr.aria-label]="audio.playing() ? 'Mettre en pause' : 'Lire'"
+            (click)="audio.toggle()"
+          >
+            <ng-icon [name]="audio.playing() ? 'lucidePause' : 'lucidePlay'" class="text-xl" />
+          </button>
+          <div class="min-w-0">
+            <p class="font-display truncate text-xl font-semibold">{{ track.title }}</p>
+            <p class="text-muted-foreground truncate text-sm">{{ track.artist.name }}</p>
+          </div>
+        </div>
+      } @else {
+        <p class="text-muted-foreground text-center text-lg">
+          Cherche un morceau et laisse la pochette battre la mesure.
+        </p>
+      }
+    </div>
+  `,
 })
-export default class Day01Pulse {}
+export default class Day01Pulse {
+  protected readonly audio = inject(PulseAudio);
+  private readonly search = viewChild.required<ElementRef<HTMLElement>>('search');
+
+  protected readonly query = signal('');
+  private readonly debounced = signal('');
+  protected readonly open = signal(false);
+  protected readonly active = signal(-1);
+
+  /** Moins d'amplitude pour qui préfère les animations réduites. */
+  private readonly motion = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.25 : 1;
+
+  protected readonly results = resource({
+    params: () => this.debounced().trim() || undefined,
+    loader: ({ params, abortSignal }) => searchTracks(params, abortSignal),
+  });
+
+  protected readonly showList = computed(
+    () => this.open() && this.debounced().trim() !== '' && !this.results.isLoading(),
+  );
+  protected readonly errorMessage = computed(() => {
+    const e = this.results.error();
+    return e instanceof Error ? e.message : 'La recherche a échoué.';
+  });
+
+  protected readonly glowOpacity = computed(() => 0.35 + this.audio.level() * 0.65 * this.motion);
+  protected readonly glowTransform = computed(
+    () => `scale(${1.1 + this.audio.level() * 0.25 * this.motion})`,
+  );
+  protected readonly coverTransform = computed(
+    () => `scale(${1 + this.audio.level() * 0.06 * this.motion})`,
+  );
+
+  private timer?: ReturnType<typeof setTimeout>;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.timer));
+  }
+
+  protected duration = formatDuration;
+
+  protected onInput(value: string): void {
+    this.query.set(value);
+    this.open.set(true);
+    this.active.set(-1);
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.debounced.set(value), DEBOUNCE_MS);
+  }
+
+  protected onKeydown(event: KeyboardEvent): void {
+    const list = this.results.value() ?? [];
+    switch (event.key) {
+      case 'ArrowDown':
+      case 'ArrowUp': {
+        if (!this.showList() || list.length === 0) return;
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        this.active.set((this.active() + step + list.length) % list.length);
+        break;
+      }
+      case 'Enter': {
+        const track = list[this.active()];
+        if (this.showList() && track) {
+          event.preventDefault();
+          this.select(track);
+        }
+        break;
+      }
+      case 'Escape':
+        this.open.set(false);
+        break;
+    }
+  }
+
+  protected select(track: DeezerTrack): void {
+    if (!track.preview) return;
+    this.open.set(false);
+    this.query.set(`${track.title} · ${track.artist.name}`);
+    void this.audio.play(track).catch((e) => console.error('Lecture impossible', e));
+  }
+
+  protected onOutsidePointer(event: PointerEvent): void {
+    if (!this.search().nativeElement.contains(event.target as Node)) {
+      this.open.set(false);
+    }
+  }
+}
