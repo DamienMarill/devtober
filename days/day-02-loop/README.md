@@ -1,41 +1,38 @@
 # Jour 2 : Loop
 
-Un circuit de voitures électriques en forme de huit, deux joueurs sur le même clavier : chacun martèle sa touche (`Z` à gauche, `O` à droite) pour faire avancer sa voiture, et le premier à boucler trois tours gagne. Sur mobile, deux gros boutons en bas de l'écran remplacent les touches.
+Un circuit de voitures électriques en huit, posé sur le lino d'une chambre d'enfant au milieu des jouets. Deux joueurs sur le même clavier martèlent leur touche (`Z` à gauche, `O` à droite) pour faire avancer leur voiture, et le premier à boucler trois tours gagne. Sur mobile, deux gros boutons remplacent les touches et le jeu passe en paysage.
 
 ## L'idée
 
-« Loop », c'est la boucle d'un circuit, et j'ai tout de suite pensé aux circuits de voitures électriques à rails, ceux où l'on tient une manette reliée au circuit par un fil. Le tracé est un huit : une grande boucle, une petite, et un croisement entre les deux. Les manettes sont les touches du clavier, dessinées comme des touches, et un fil part du bornier du circuit jusqu'à chacune. À chaque pression, une impulsion lumineuse remonte le fil jusqu'à la piste : c'est l'électricité qui fait avancer la voiture.
+« Loop », c'est la boucle d'un circuit. J'ai pensé aux circuits jouets à rails, avec leur manette reliée au circuit par un fil. Le tracé est un huit avec un pont au croisement. Les manettes sont des touches du clavier, et un fil part du bornier jusqu'à chacune. À chaque pression, une impulsion lumineuse remonte le fil jusqu'au circuit.
 
 ## Comment c'est codé
 
-Trois petits modules sans rien d'Angular, chacun avec ses tests, et un composant qui les assemble.
-
-**Le tracé** ([`lib/track.ts`](./lib/track.ts)). Le huit est une liste de points de contrôle par lesquels passe une spline de Catmull-Rom fermée. Le croisement est un point de contrôle présent deux fois dans la liste, donc la courbe y passe deux fois. La spline est échantillonnée en polyligne avec les distances cumulées, ce qui donne `poseAt(d)` : la position et la direction de la piste à `d` unités du départ, modulo la longueur du tour. `offsetAt(d, o)` décale ce point perpendiculairement : c'est ainsi que sont tracés les deux rails et posées les voitures.
+**Le tracé** ([`lib/track.ts`](./lib/track.ts)). Le huit est construit comme un vrai circuit jouet : deux cercles identiques et leurs deux tangentes communes intérieures, qui se croisent au centre. Tout se raccorde sans angle. Le tracé est échantillonné en polyligne, ce qui donne `poseAt(d)` : la position et la direction à `d` unités du départ, modulo la longueur du tour. `offsetAt(d, o)` décale ce point sur le côté pour tracer les voies et poser les voitures. `elevation()` donne la hauteur du pont, avec des rampes adoucies.
 
 ```ts
-offsetAt(distance: number, offset: number): Pose {
-  const pose = this.poseAt(distance);
-  return {
-    x: pose.x - Math.sin(pose.angle) * offset,
-    y: pose.y + Math.cos(pose.angle) * offset,
-    angle: pose.angle,
-  };
-}
+const theta = Math.asin(radius / spacing); // pente des droites
+const half = spacing * Math.cos(theta); // du croisement au point de tangence
+const arc = radius * (Math.PI + 2 * theta); // chaque boucle
 ```
 
-**La course** ([`lib/race.ts`](./lib/race.ts)). Chaque voiture n'a qu'une distance parcourue et une vitesse. Une pression ajoute une impulsion à la vitesse (plafonnée), et à chaque image la vitesse décroît de façon exponentielle : si on arrête de taper, la voiture glisse puis s'arrête. Un tour est bouclé quand la distance dépasse un multiple de la longueur du circuit ; l'instant exact du passage est recalculé à partir du dépassement, pour que les chronos ne dépendent pas de la cadence des images. Le décompte de départ (trois feux rouges) vit aussi là, et le temps qui déborde du décompte dans la même image est déjà compté comme temps de course.
+**La course** ([`lib/race.ts`](./lib/race.ts)). Chaque voiture n'a qu'une distance et une vitesse. Une pression ajoute une impulsion plafonnée, et la vitesse décroît de façon exponentielle à chaque image. L'instant exact du passage de la ligne est recalculé à partir du dépassement, pour que les chronos ne dépendent pas de la cadence des images.
 
-**Le dessin** ([`lib/scene.ts`](./lib/scene.ts)). Un canvas 2D plein écran. La route est la polyligne du circuit tracée en trait épais (un trait plus large et plus clair en dessous fait les bordures), les rails sont deux polylignes décalées, la ligne de départ un damier. Les fils sont des courbes de Bézier cubiques qui tombent du bornier et remontent dans la manette ; les impulsions sont des points qui parcourent ces courbes en 220 ms.
+**Le dessin**, sur un canvas 2D en couches ([`lib/scene.ts`](./lib/scene.ts)). Ce qui ne bouge pas est dessiné une seule fois par mise en page sur trois calques :
 
-**Le composant** ([`day-02-loop.ts`](./day-02-loop.ts)). Il écoute `keydown` sur le document (en ignorant la répétition automatique du clavier) et `pointerdown` sur les deux boutons, fait tourner la boucle `requestAnimationFrame` seulement tant qu'il y a quelque chose à animer, et recopie l'état de la course dans des signals pour le HUD (compteur de tours, chrono du tour, dernier et meilleur tour, chrono de course au milieu).
+- le sol ([`lib/floor.ts`](./lib/floor.ts)) : des dalles de lino, des mouchetures et des reflets, tirés d'un générateur aléatoire à graine pour ne pas changer au redimensionnement ;
+- le décor ([`lib/decor.ts`](./lib/decor.ts)) : canard, billes, briques, dé, crayons, toupie, voiture de police et stickers, placés dans le repère du circuit ;
+- la piste ([`lib/road.ts`](./lib/road.ts)) : l'asphalte, les fentes entre leurs rails argentés, les glissières, les vibreurs, le bornier, puis à part le pont et le portique START.
 
-Le point délicat, c'était de faire rejoindre les fils aux boutons, qui sont de vrais `<button>` HTML et pas des dessins. À chaque redimensionnement, le composant mesure leur `getBoundingClientRect()` par rapport à l'hôte, en déduit l'espace restant pour le circuit (sous le HUD, au-dessus des boutons) et donne au canvas le point d'arrivée de chaque fil. Sur mobile, `@media (pointer: coarse)` transforme les touches de clavier en gros boutons ronds, et les fils suivent.
+À chaque image, on empile le sol, les fils (ils passent sous la piste), la piste, les voitures au sol, le pont, puis les voitures sur le pont. Une voiture qui passe dessous disparaît sous le tablier. Toutes les ombres partent vers le bas à droite : la lumière vient de la fenêtre.
+
+**Le composant** ([`day-02-loop.ts`](./day-02-loop.ts)). Il écoute le clavier et les deux boutons, et ne fait tourner la boucle d'animation que s'il y a quelque chose à animer. Il place le circuit sous le HUD, soit au-dessus des manettes, soit entre elles, selon ce qui le montre le plus grand. Il mesure ensuite les boutons pour que les fils les rejoignent. Sur un écran tactile tenu en portrait, toute la scène est tournée d'un quart de tour. Les mesures passent par `offsetLeft` et `offsetTop`, qui ignorent cette rotation. Au départ d'une partie, il demande aussi le plein écran et le verrouillage en paysage, là où le navigateur le permet.
 
 ## Lien avec le mot
 
-Le circuit est une boucle fermée : la distance parcourue est prise modulo la longueur du tour, et une voiture peut tourner indéfiniment. Le huit en est une version tordue, qui se croise elle-même. Et le jeu lui-même est une boucle : la même touche, pressée encore et encore, c'est le seul contrôle.
+Le circuit est une boucle fermée que les voitures parcourent indéfiniment, et le huit en est une version qui se croise elle-même. Le jeu aussi est une boucle : la même touche, pressée encore et encore.
 
 ## Pour aller plus loin
 
-- Les vraies voitures à rails décrochent dans les virages si on va trop vite. Un rayon de courbure trop petit pour la vitesse pourrait faire sortir la voiture et la renvoyer sur la ligne quelques secondes plus tard : ça récompenserait le rythme plutôt que le martelage.
-- Le bouton « Démo » fait courir deux robots qui pressent à des cadences aléatoires ; c'est aussi lui que filme `npm run gif -- 2`.
+- Faire décrocher une voiture qui prend un virage trop vite, comme les vraies : ça récompenserait le rythme plutôt que le martelage.
+- Le bouton « Démo » fait courir deux robots ; c'est lui que filme `npm run gif -- 2`.

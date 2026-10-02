@@ -39,8 +39,8 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
   2: {
     component: () => import('./day-02-loop/day-02-loop').then((m) => m.default),
     readme: () => import('./day-02-loop/README.md').then((m) => m.default),
-    // Le bouton « Démo » : deux robots font la course ; 3 s de décompte puis trois tours en ~25 s.
-    capture: { click: { x: 417, y: 406 }, seconds: 34 },
+    // Le bouton « Démo » : deux robots font la course ; 3 s de décompte, trois tours en ~22 s, puis le podium.
+    capture: { click: { x: 417, y: 391 }, seconds: 30 },
   },
   // new-day:insert
 };
