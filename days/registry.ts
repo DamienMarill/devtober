@@ -36,5 +36,11 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     // Le bouton lecture d'*Iris Out* ; 30 s = la durée d'un extrait Deezer.
     capture: { click: { x: 307, y: 534 }, seconds: 30, settle: 3000 },
   },
+  2: {
+    component: () => import('./day-02-loop/day-02-loop').then((m) => m.default),
+    readme: () => import('./day-02-loop/README.md').then((m) => m.default),
+    // Le bouton « Démo » : deux robots font la course ; 3 s de décompte puis trois tours en ~25 s.
+    capture: { click: { x: 417, y: 406 }, seconds: 34 },
+  },
   // new-day:insert
 };
