@@ -199,9 +199,31 @@ export interface Fit {
   scale: number;
   tx: number;
   ty: number;
+  /** Rotation du circuit (radians, sens horaire à l'écran), appliquée avant l'échelle et la translation. */
+  angle: number;
 }
 
-export function fitBox(box: Box, width: number, height: number, padding: number): Fit {
+/** Tourne un point autour de l'origine (le croisement), `angle` en radians. */
+export function rotate(p: Point, angle: number): Point {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return { x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos };
+}
+
+/** Projette un point du circuit en pixels. */
+export function project(fit: Fit, p: Point): Point {
+  const r = rotate(p, fit.angle);
+  return { x: r.x * fit.scale + fit.tx, y: r.y * fit.scale + fit.ty };
+}
+
+/** `box` est la boîte du circuit déjà tourné de `angle` : c'est elle qui est centrée dans la zone. */
+export function fitBox(
+  box: Box,
+  width: number,
+  height: number,
+  padding: number,
+  angle = 0,
+): Fit {
   const w = box.maxX - box.minX;
   const h = box.maxY - box.minY;
   const scale = Math.max(0.0001, Math.min((width - 2 * padding) / w, (height - 2 * padding) / h));
@@ -209,6 +231,7 @@ export function fitBox(box: Box, width: number, height: number, padding: number)
     scale,
     tx: (width - w * scale) / 2 - box.minX * scale,
     ty: (height - h * scale) / 2 - box.minY * scale,
+    angle,
   };
 }
 

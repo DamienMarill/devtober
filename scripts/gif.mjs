@@ -5,7 +5,7 @@
 //   preview-embed.gif  l'image d'aperçu des liens partagés (og:image) : sous 5 Mo, sinon les réseaux l'ignorent
 //
 // Usage : npm run gif -- 1                (tout, durée définie par le jour)
-//         npm run gif -- 1 --preview      (3 s, GIF seulement, pour vérifier le clic et le cadrage : preview-test.gif)
+//         npm run gif -- 1 --preview      (3 s, GIF seulement, pour vérifier le clic (ou la touche) et le cadrage : preview-test.gif)
 //         npm run gif -- 1 --embed-only   (refait seulement preview-embed.gif, depuis preview.mp4 : sans refilmer)
 //
 // Options : --url <adresse>   filmer un serveur déjà lancé (ex. http://localhost:4200) au lieu de construire l'app
@@ -23,7 +23,7 @@
 //           --embed-budget <Mo>  poids maximal de l'image d'embed (4.5 : X, LinkedIn et Slack refusent au-delà de 5)
 //           --keep-video      garder la vidéo brute (.webm) à côté du GIF
 //
-// Réglages par jour : `capture` dans days/registry.ts (clic, durée, attente).
+// Réglages par jour : `capture` dans days/registry.ts (clic et/ou touche, durée, attente).
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -114,7 +114,7 @@ function serveDist() {
 }
 
 // ---------- enregistrement ----------
-/** Filme `/capture/<jour>` et renvoie la vidéo brute, avec l'instant du clic (`from`) et la durée utile. */
+/** Filme `/capture/<jour>` et renvoie la vidéo brute, avec l'instant du clic ou de la touche (`from`) et la durée utile. */
 async function record() {
   let server;
   let baseUrl = option('url', null);
@@ -161,17 +161,23 @@ async function record() {
     seconds: Number(el.dataset.seconds),
     settle: Number(el.dataset.settle),
     click: el.dataset.clickX === undefined ? null : { x: Number(el.dataset.clickX), y: Number(el.dataset.clickY) },
+    key: el.dataset.key ?? null,
   }));
   await page.waitForTimeout(cfg.settle);
 
   if (cfg.click) {
     console.log(`→ Clic en (${cfg.click.x}, ${cfg.click.y})`);
     await page.mouse.click(cfg.click.x, cfg.click.y);
-  } else {
-    console.log('→ Pas de clic défini : on filme dès que la page est chargée');
+  }
+  if (cfg.key) {
+    console.log(`→ Touche « ${cfg.key} »`);
+    await page.keyboard.press(cfg.key);
+  }
+  if (!cfg.click && !cfg.key) {
+    console.log('→ Ni clic ni touche définis : on filme dès que la page est chargée');
   }
   const seconds = preview ? PREVIEW_SECONDS : cfg.seconds;
-  // Un peu avant le clic : la vidéo et l'horloge du script ne sont pas parfaitement synchrones.
+  // Un peu avant le clic ou la touche : la vidéo et l'horloge du script ne sont pas parfaitement synchrones.
   const from = Math.max(0, (Date.now() - startedAt) / 1000 - 0.1);
   console.log(`→ Enregistrement de ${seconds} s…`);
   await page.waitForTimeout(seconds * 1000 + 300);

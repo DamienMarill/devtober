@@ -82,9 +82,10 @@ Chaque jour a un réglage `capture` dans [`days/registry.ts`](./days/registry.ts
 capture: { click: { x: 307, y: 534 }, seconds: 30, settle: 3000 },
 ```
 
-- `click` : où cliquer, en pixels dans le carré de 720 × 720, pour lancer l'animation. `null` si le jour démarre tout seul : on filme dès que la page est chargée.
-- `seconds` : la durée filmée, à partir du clic.
-- `settle` : l'attente (ms) avant de cliquer, le temps que le jour finisse de charger (1500 par défaut).
+- `click` : où cliquer, en pixels dans le carré de 720 × 720, pour lancer l'animation. `null` si on ne clique pas.
+- `key` (optionnel) : une touche à presser pour lancer l'animation (nom Playwright : `'t'`, `'Space'`, `'Enter'`…), seule ou après le clic. Sans `click` ni `key`, le jour démarre tout seul : on filme dès que la page est chargée.
+- `seconds` : la durée filmée, à partir du clic ou de la touche.
+- `settle` : l'attente (ms) avant de cliquer ou d'appuyer, le temps que le jour finisse de charger (1500 par défaut).
 
 Pour trouver les coordonnées d'un bouton, ouvre `/capture/day-03-bloom` en mode « appareil » 720 × 720 dans les outils de développement, ou mesure-le avec Playwright (`locator(...).boundingBox()`). Le registre est compilé dans l'app : après l'avoir modifié, relance sans `--skip-build`.
 

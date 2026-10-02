@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DECOR } from './decor';
-import { POWER_BASE, ROAD_WIDTH, circuitBounds } from './road';
-import { Point, Track, figureEight } from './track';
+import { POWER_BASE, ROAD_WIDTH, TILT, circuitBounds } from './road';
+import { Point, Track, figureEight, rotate } from './track';
 
 const track = new Track(figureEight().points);
 /** Distance d'un point au milieu de la route. */
@@ -21,14 +21,13 @@ describe('décor', () => {
   it('garde tout le décor dans le cadre affiché (rien de coupé au bord de l’écran)', () => {
     const box = circuitBounds(track);
     for (const item of DECOR) {
-      expect(item.x - item.radius, `objet en (${item.x}, ${item.y})`).toBeGreaterThanOrEqual(
-        box.minX,
-      );
-      expect(item.x + item.radius, `objet en (${item.x}, ${item.y})`).toBeLessThanOrEqual(box.maxX);
-      expect(item.y - item.radius, `objet en (${item.x}, ${item.y})`).toBeGreaterThanOrEqual(
-        box.minY,
-      );
-      expect(item.y + item.radius, `objet en (${item.x}, ${item.y})`).toBeLessThanOrEqual(box.maxY);
+      // La boîte est dans le repère tourné du circuit : on y met l'objet avant de comparer.
+      const { x, y } = rotate(item, TILT);
+      const at = `objet en (${item.x}, ${item.y})`;
+      expect(x - item.radius, at).toBeGreaterThanOrEqual(box.minX);
+      expect(x + item.radius, at).toBeLessThanOrEqual(box.maxX);
+      expect(y - item.radius, at).toBeGreaterThanOrEqual(box.minY);
+      expect(y + item.radius, at).toBeLessThanOrEqual(box.maxY);
     }
   });
 

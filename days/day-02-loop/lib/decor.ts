@@ -42,10 +42,10 @@ export const DECOR: readonly Item[] = [
   { x: 392, y: -180, angle: 0.3, radius: 25, draw: tires },
   { x: 58, y: 168, angle: 0.2, radius: 16, draw: cone },
   { x: -58, y: 168, angle: -0.3, radius: 16, draw: cone },
-  { x: -405, y: -185, angle: 0.45, radius: 36, draw: (c) => crayon(c, '#e64980') },
-  { x: -414, y: -170, angle: 0.6, radius: 36, draw: (c) => crayon(c, '#228be6') },
+  { x: -405, y: -170, angle: 0.45, radius: 36, draw: (c) => crayon(c, '#e64980') },
+  { x: -420, y: -158, angle: 0.6, radius: 36, draw: (c) => crayon(c, '#228be6') },
   { x: 78, y: -196, angle: 0.25, radius: 20, draw: policeCar },
-  { x: 330, y: 200, angle: 0.1, radius: 20, draw: spinningTop },
+  { x: 345, y: 196, angle: 0.1, radius: 20, draw: spinningTop },
 ];
 
 /** Dessine tout le décor ; `ctx` est déjà dans le repère du circuit. */
@@ -144,18 +144,22 @@ function smiley(ctx: CanvasRenderingContext2D): void {
 
 function duck(ctx: CanvasRenderingContext2D): void {
   const yellow = '#ffd43b';
-  // Corps et queue.
+  // Corps et queue, un seul tracé : l'ombre, la couleur et le volume couvrent tout d'un bloc.
+  const body = () => {
+    ctx.beginPath();
+    ctx.ellipse(-2, 0, 23, 17, 0, 0, Math.PI * 2);
+    // Même sens de rotation que l'ellipse : sinon, là où la queue la recouvre, le remplissage se creuse.
+    ctx.moveTo(-16, 9);
+    ctx.quadraticCurveTo(-30, 8, -34, 0);
+    ctx.quadraticCurveTo(-30, -8, -16, -9);
+    ctx.closePath();
+  };
   dropShadow(ctx, 8);
   ctx.fillStyle = yellow;
-  ctx.beginPath();
-  ctx.ellipse(-2, 0, 23, 17, 0, 0, Math.PI * 2);
-  ctx.moveTo(-20, -7);
-  ctx.quadraticCurveTo(-34, -4, -31, 0);
-  ctx.quadraticCurveTo(-34, 4, -20, 7);
+  body();
   ctx.fill();
   noShadow(ctx);
-  ctx.beginPath();
-  ctx.ellipse(-2, 0, 23, 17, 0, 0, Math.PI * 2);
+  body();
   volume(ctx, 17, 0.7);
   // Ailes.
   ctx.strokeStyle = '#f0a800';

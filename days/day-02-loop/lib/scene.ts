@@ -1,15 +1,15 @@
 /**
  * La scène, sur un canvas 2D, en couches. Ce qui ne bouge pas est dessiné une fois par mise en page
  * sur des calques : le sol et le décor, la piste au sol, puis ce qui passe au-dessus (pont et portique).
- * À chaque image on empile : sol, fils des manettes (ils passent sous la piste), piste, voitures au
+ * À chaque image on empile : sol, piste, fils des manettes (ils traînent sur la piste), voitures au
  * sol, pont, voitures sur le pont. Les coordonnées du circuit sont celles de `Track` ; `Fit` les
  * projette en pixels.
  */
 import { drawDecor } from './decor';
-import { drawLino } from './floor';
+import { drawLino, seeded } from './floor';
 import { CAR_SCALE, drawToyCar } from './paint';
-import { JACKS, LANE_OFFSET, bridgeSpan, drawGround, drawLeds, drawOverhead } from './road';
-import { Bridge, Fit, Loop, Point, Track, elevation } from './track';
+import { JACKS, LANE_OFFSET, drawGround, drawLeds, drawOverhead, isOnBridge } from './road';
+import { Bridge, Fit, Loop, Point, Track, elevation, project } from './track';
 
 /** Durée du trajet d'une impulsion le long d'un fil, de la manette à la piste (secondes). */
 export const PULSE_DURATION = 0.22;
@@ -58,26 +58,99 @@ export interface Frame {
 
 /** Position en pixels de la prise d'un joueur sur le bornier. */
 export function plugPosition(fit: Fit, player: 0 | 1): Point {
-  const jack = JACKS[player];
-  return { x: jack.x * fit.scale + fit.tx, y: jack.y * fit.scale + fit.ty };
+  return project(fit, JACKS[player]);
 }
 
-/** Points de contrôle du fil : il descend du bornier, file sous la piste et remonte dans la manette. */
-export function wireCurve(w: Wire): [Point, Point, Point, Point] {
-  const drop = Math.max(50, Math.abs(w.to.y - w.from.y) * 0.6);
-  return [w.from, { x: w.from.x, y: w.from.y + drop }, { x: w.to.x, y: w.to.y - drop }, w.to];
+/** Rayon du coude du fil, quand il passe de la descente verticale à la course horizontale (pixels). */
+const WIRE_BEND = 70;
+
+/**
+ * Trajectoire de base du fil, hors de la piste : il descend droit du bornier dans le creux sous le
+ * croisement, tourne dans le couloir sous le circuit, puis file à l'horizontale jusqu'à la manette.
+ * Points répartis à intervalles réguliers le long du fil.
+ */
+export function wireBase(w: Wire, steps: number): Point[] {
+  const dx = w.to.x - w.from.x;
+  const dy = w.to.y - w.from.y;
+  const r = Math.min(WIRE_BEND, Math.abs(dx), Math.abs(dy));
+  const corner = { x: w.from.x, y: w.to.y };
+  const before = { x: corner.x, y: corner.y - Math.sign(dy) * r };
+  const after = { x: corner.x + Math.sign(dx) * r, y: corner.y };
+
+  const dense: Point[] = [w.from, before];
+  for (let i = 1; i < 24; i++) {
+    const t = i / 24;
+    const u = 1 - t;
+    dense.push({
+      x: u * u * before.x + 2 * u * t * corner.x + t * t * after.x,
+      y: u * u * before.y + 2 * u * t * corner.y + t * t * after.y,
+    });
+  }
+  dense.push(after, w.to);
+
+  const lengths = [0];
+  for (let i = 1; i < dense.length; i++) {
+    lengths.push(lengths[i - 1] + Math.hypot(dense[i].x - dense[i - 1].x, dense[i].y - dense[i - 1].y));
+  }
+  const total = lengths[lengths.length - 1];
+  const out: Point[] = [];
+  let k = 1;
+  for (let i = 0; i <= steps; i++) {
+    const target = (total * i) / steps;
+    while (k < dense.length - 1 && lengths[k] < target) k++;
+    const span = lengths[k] - lengths[k - 1] || 1;
+    const f = (target - lengths[k - 1]) / span;
+    out.push({
+      x: dense[k - 1].x + (dense[k].x - dense[k - 1].x) * f,
+      y: dense[k - 1].y + (dense[k].y - dense[k - 1].y) * f,
+    });
+  }
+  return out;
 }
 
-/** Point d'une courbe de Bézier cubique. */
-export function bezier([p0, p1, p2, p3]: readonly [Point, Point, Point, Point], t: number): Point {
-  const u = 1 - t;
-  const a = u * u * u;
-  const b = 3 * u * u * t;
-  const c = 3 * u * t * t;
-  const d = t * t * t;
+/** Nombre de segments d'un fil. */
+const WIRE_STEPS = 72;
+
+/**
+ * Le fil tel qu'il traîne sur le sol : la trajectoire de base, déformée par des ondulations irrégulières
+ * (quelques sinusoïdes de fréquences et de phases tirées au hasard, nulles aux deux bouts). La graine fixe
+ * la forme : elle ne bouge pas d'une mise en page à l'autre.
+ */
+export function wirePath(w: Wire, seed: number): Point[] {
+  const random = seeded(seed);
+  const length = Math.hypot(w.to.x - w.from.x, w.to.y - w.from.y);
+  const waves = [0, 1, 2].map((k) => ({
+    cycles: 1.2 + k * 1.3 + random() * 1.1,
+    phase: random() * Math.PI * 2,
+    amplitude: (1 - k * 0.28) * (0.5 + random() * 0.5),
+  }));
+  const reach = Math.min(22, 8 + length * 0.04);
+  const base = wireBase(w, WIRE_STEPS);
+  return base.map((p, i) => {
+    const t = i / WIRE_STEPS;
+    const a = base[Math.max(0, i - 1)];
+    const b = base[Math.min(WIRE_STEPS, i + 1)];
+    const norm = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    // Normale au fil, et un décalage qui s'éteint aux extrémités (le fil reste branché).
+    const nx = -(b.y - a.y) / norm;
+    const ny = (b.x - a.x) / norm;
+    const envelope = Math.sin(Math.PI * t) ** 0.6;
+    const offset =
+      envelope *
+      reach *
+      waves.reduce((sum, wave) => sum + wave.amplitude * Math.sin(wave.cycles * Math.PI * 2 * t + wave.phase), 0);
+    return { x: p.x + nx * offset, y: p.y + ny * offset };
+  });
+}
+
+/** Point d'un fil échantillonné (`t` de 0 au bornier à 1 à la manette). */
+function along(path: readonly Point[], t: number): Point {
+  const f = Math.min(Math.max(t, 0), 1) * (path.length - 1);
+  const i = Math.min(Math.floor(f), path.length - 2);
+  const k = f - i;
   return {
-    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
-    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
+    x: path[i].x + (path[i + 1].x - path[i].x) * k,
+    y: path[i].y + (path[i + 1].y - path[i].y) * k,
   };
 }
 
@@ -99,9 +172,9 @@ export class Scene {
   private dpr = 1;
   private width = 0;
   private height = 0;
-  private fit: Fit = { scale: 1, tx: 0, ty: 0 };
+  private fit: Fit = { scale: 1, tx: 0, ty: 0, angle: 0 };
   private circuit?: Circuit;
-  private wires: readonly [Wire | null, Wire | null] = [null, null];
+  private wirePaths: readonly (readonly Point[] | null)[] = [null, null];
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -120,7 +193,7 @@ export class Scene {
     this.height = height;
     this.fit = fit;
     this.circuit = circuit;
-    this.wires = wires;
+    this.wirePaths = wires.map((wire, i) => (wire ? wirePath(wire, 11 + i * 17) : null));
     for (const c of [this.canvas, this.floor.canvas, this.ground.canvas, this.overhead.canvas]) {
       c.width = Math.round(width * this.dpr);
       c.height = Math.round(height * this.dpr);
@@ -148,21 +221,18 @@ export class Scene {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.drawImage(this.floor.canvas, 0, 0);
 
+    ctx.drawImage(this.ground.canvas, 0, 0);
+
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawWires(frame.pulses);
-
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(this.ground.canvas, 0, 0);
 
     this.toWorld(ctx);
     drawLeds(ctx, [PLAYER_LOOKS[0].color, PLAYER_LOOKS[1].color], frame.pressed);
 
     // Les voitures sur le pont passent par-dessus le tablier, les autres dessous.
-    const [from, to] = bridgeSpan(bridge);
     const cars = ([0, 1] as const).map((i) => {
       const d = frame.distances[i] - CAR_SETBACK;
-      const lap = ((d % track.length) + track.length) % track.length;
-      return { i, d, high: lap >= from && lap <= to };
+      return { i, d, high: isOnBridge(bridge, track.length, d) };
     });
     for (const car of cars) if (!car.high) this.drawCar(car.i, car.d);
 
@@ -173,8 +243,10 @@ export class Scene {
   }
 
   private toWorld(ctx: CanvasRenderingContext2D): void {
-    const { scale, tx, ty } = this.fit;
-    ctx.setTransform(this.dpr * scale, 0, 0, this.dpr * scale, this.dpr * tx, this.dpr * ty);
+    const { scale, tx, ty, angle } = this.fit;
+    const cos = this.dpr * scale * Math.cos(angle);
+    const sin = this.dpr * scale * Math.sin(angle);
+    ctx.setTransform(cos, sin, -sin, cos, this.dpr * tx, this.dpr * ty);
   }
 
   private drawCar(player: 0 | 1, distance: number): void {
@@ -195,13 +267,12 @@ export class Scene {
   private drawWires(pulses: readonly Pulse[]): void {
     const { ctx } = this;
     ctx.lineCap = 'round';
-    this.wires.forEach((wire, i) => {
-      if (!wire) return;
+    ctx.lineJoin = 'round';
+    this.wirePaths.forEach((path, i) => {
+      if (!path) return;
       const look = PLAYER_LOOKS[i];
-      const curve = wireCurve(wire);
       ctx.beginPath();
-      ctx.moveTo(curve[0].x, curve[0].y);
-      ctx.bezierCurveTo(curve[1].x, curve[1].y, curve[2].x, curve[2].y, curve[3].x, curve[3].y);
+      path.forEach((p, k) => (k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
       // Ombre au sol, gaine sombre, puis le fil coloré.
       ctx.shadowColor = 'rgba(80, 58, 30, 0.35)';
       ctx.shadowBlur = 3 * this.dpr;
@@ -218,7 +289,7 @@ export class Scene {
       // Les impulsions remontent le fil, de la manette vers le bornier.
       for (const pulse of pulses) {
         if (pulse.player !== i) continue;
-        const p = bezier(curve, 1 - pulse.t);
+        const p = along(path, 1 - pulse.t);
         ctx.shadowColor = look.glow;
         ctx.shadowBlur = 10 * this.dpr;
         ctx.fillStyle = '#ffffff';

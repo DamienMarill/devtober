@@ -24,9 +24,9 @@ const arc = radius * (Math.PI + 2 * theta); // chaque boucle
 - le décor ([`lib/decor.ts`](./lib/decor.ts)) : canard, billes, briques, dé, crayons, toupie, voiture de police et stickers, placés dans le repère du circuit ;
 - la piste ([`lib/road.ts`](./lib/road.ts)) : l'asphalte, les fentes entre leurs rails argentés, les glissières, les vibreurs, le bornier, puis à part le pont et le portique START.
 
-À chaque image, on empile le sol, les fils (ils passent sous la piste), la piste, les voitures au sol, le pont, puis les voitures sur le pont. Une voiture qui passe dessous disparaît sous le tablier. Toutes les ombres partent vers le bas à droite : la lumière vient de la fenêtre.
+À chaque image, on empile le sol, la piste, les fils, les voitures au sol, le pont, puis les voitures sur le pont. Une voiture passe sur le pont un peu avant sa rampe et un peu après (`isOnBridge`) : le tablier a la couleur de la route, il couperait sinon son nez ou sa queue à l'entrée et à la sortie. Toutes les ombres partent vers le bas à droite : la lumière vient de la fenêtre.
 
-**Le composant** ([`day-02-loop.ts`](./day-02-loop.ts)). Il écoute le clavier et les deux boutons, et ne fait tourner la boucle d'animation que s'il y a quelque chose à animer. Il place le circuit sous le HUD, soit au-dessus des manettes, soit entre elles, selon ce qui le montre le plus grand. Il mesure ensuite les boutons pour que les fils les rejoignent. Sur un écran tactile tenu en portrait, toute la scène est tournée d'un quart de tour. Les mesures passent par `offsetLeft` et `offsetTop`, qui ignorent cette rotation. Au départ d'une partie, il demande aussi le plein écran et le verrouillage en paysage, là où le navigateur le permet.
+**Le composant** ([`day-02-loop.ts`](./day-02-loop.ts)). Il écoute le clavier et les deux boutons, et ne fait tourner la boucle d'animation que s'il y a quelque chose à animer. Il place le circuit, légèrement tourné, sous le HUD et au-dessus du couloir où courent les fils. Il mesure ensuite les boutons pour que les fils les rejoignent par en dessous, sans jamais croiser la piste ; leurs ondulations sont tirées d'une graine, donc fixes. Sur un écran tactile tenu en portrait, toute la scène est tournée d'un quart de tour. Les mesures passent par `offsetLeft` et `offsetTop`, qui ignorent cette rotation. Au départ d'une partie, il demande aussi le plein écran et le verrouillage en paysage, là où le navigateur le permet.
 
 ## Lien avec le mot
 
@@ -35,4 +35,3 @@ Le circuit est une boucle fermée que les voitures parcourent indéfiniment, et 
 ## Pour aller plus loin
 
 - Faire décrocher une voiture qui prend un virage trop vite, comme les vraies : ça récompenserait le rythme plutôt que le martelage.
-- Le bouton « Démo » fait courir deux robots ; c'est lui que filme `npm run gif -- 2`.

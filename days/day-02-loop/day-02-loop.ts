@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   afterNextRender,
   afterRenderEffect,
@@ -12,7 +13,7 @@ import {
 } from '@angular/core';
 import { LINO } from './lib/floor';
 import { LAPS, Race, formatTime } from './lib/race';
-import { circuitBounds } from './lib/road';
+import { TILT, circuitBounds } from './lib/road';
 import {
   Circuit,
   PLAYER_LOOKS,
@@ -26,9 +27,15 @@ import { Fit, Track, figureEight, fitBox } from './lib/track';
 
 /** Touche de chaque joueur (`event.key`, insensible à la casse) : Z à gauche du clavier, O à droite. */
 const KEYS = ['z', 'o'] as const;
+/** Touche qui lance la démo (deux robots font la course). */
+const DEMO_KEY = 't';
 const PLAYER_NAMES = ['Joueur 1', 'Joueur 2'] as const;
 /** Marge (pixels) entre le circuit et les bords de la zone qui lui est laissée. */
 const PADDING = 10;
+/** Part de la hauteur du HUD dont le circuit remonte sous lui. */
+const RISE = 0.3;
+/** Le bas de la zone du circuit (sa marge de décor) mord de tant de pixels sur le couloir des fils. */
+const WIRE_OVERLAP = 30;
 /**
  * Les robots de la démo : chacun tire au départ sa cadence moyenne (secondes entre deux pressions), puis
  * presse à intervalles aléatoires autour d'elle. Deux rythmes différents, pour qu'il y ait un vainqueur.
@@ -88,7 +95,22 @@ function buildCircuit(): Circuit {
     '(document:keyup)': 'onKeyup($event)',
     '(window:blur)': 'releaseAll()',
   },
+  imports: [NgTemplateOutlet],
   template: `
+    <!-- Le bouton de départ : une touche penchée, en vitesse, avec damier, traînées et reflet qui file. -->
+    <ng-template #startButton let-label>
+      <button
+        type="button"
+        class="start-button pointer-events-auto font-display"
+        (click)="start(demo())"
+      >
+        <span class="streaks" aria-hidden="true"></span>
+        <span class="label">{{ label }}</span>
+        <span class="chevrons" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="checker" aria-hidden="true"></span>
+      </button>
+    </ng-template>
+
     <div
       class="absolute top-1/2 left-1/2 overflow-hidden [container-type:size]"
       [style.width.px]="stage().width"
@@ -163,20 +185,7 @@ function buildCircuit(): Circuit {
       <div class="pointer-events-none absolute inset-0 z-10 grid place-items-center">
         @switch (phase()) {
           @case ('idle') {
-            <div class="panel pointer-events-auto">
-              <p class="text-[length:clamp(0.85rem,3.6cqh,1.1rem)]">
-                Trois tours, deux voitures : martèle ta touche pour faire avancer la tienne.
-              </p>
-              <p class="text-[length:clamp(0.7rem,2.9cqh,0.875rem)] opacity-75">
-                <kbd [style.color]="looks[0].color">Z</kbd> pour le joueur 1,
-                <kbd [style.color]="looks[1].color">O</kbd> pour le joueur 2 ; sur mobile, les deux
-                gros boutons.
-              </p>
-              <div class="flex items-center gap-3">
-                <button type="button" class="start-button" (click)="start(false)">Départ</button>
-                <button type="button" class="demo-button" (click)="start(true)">Démo</button>
-              </div>
-            </div>
+            <ng-container *ngTemplateOutlet="startButton; context: { $implicit: 'Départ' }" />
           }
           @case ('countdown') {
             <div
@@ -211,10 +220,11 @@ function buildCircuit(): Circuit {
               >
                 {{ names[winner()] }}
               </p>
-              <p class="font-mono tabular-nums">
-                {{ hud().elapsed }} · meilleur tour {{ hud().players[winner()].best }}
+              <p class="font-mono tabular-nums text-center">
+                <span class="text-3xl">{{ hud().elapsed }}</span><br>
+                meilleur tour {{ hud().players[winner()].best }}
               </p>
-              <button type="button" class="start-button" (click)="start(demo())">Rejouer</button>
+              <ng-container *ngTemplateOutlet="startButton; context: { $implicit: 'Rejouer' }" />
             </div>
           }
         }
@@ -226,7 +236,7 @@ function buildCircuit(): Circuit {
           #pad
           type="button"
           class="pad absolute z-20"
-          [class]="i === 0 ? 'left-[clamp(0.75rem,3cqh,2rem)]' : 'right-[clamp(0.75rem,3cqh,2rem)]'"
+          [class]="i === 0 ? 'left-[clamp(1.5rem,8cqw,7rem)]' : 'right-[clamp(1.5rem,8cqw,7rem)]'"
           [class.pressed]="pressed()[i]"
           [style.--pad-color]="looks[i].color"
           [style.--pad-glow]="looks[i].glow"
@@ -264,15 +274,8 @@ function buildCircuit(): Circuit {
       background: rgb(36 33 63 / 0.92);
       box-shadow: 0 12px 32px rgb(60 40 20 / 0.35);
     }
-    kbd {
-      border: 1px solid rgb(255 255 255 / 0.3);
-      border-radius: 0.25rem;
-      padding: 0 0.35rem;
-      font-family: var(--font-mono);
-      font-weight: 700;
-    }
     .pad {
-      bottom: clamp(0.75rem, 3cqh, 2rem);
+      bottom: clamp(1rem, 5cqh, 2.5rem);
       display: grid;
       place-items: center;
       width: 3.75rem;
@@ -330,22 +333,152 @@ function buildCircuit(): Circuit {
         transform: scale(1.3);
       }
     }
-    .start-button,
-    .demo-button {
-      border-radius: 9999px;
-      padding: 0.45rem 1.25rem;
-      font-weight: 600;
-    }
     .start-button {
-      background: var(--primary);
-      color: var(--primary-foreground);
+      position: relative;
+      isolation: isolate;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      overflow: hidden;
+      border-radius: 0.5rem;
+      padding: clamp(0.6rem, 3cqh, 1.1rem) clamp(1.6rem, 8cqh, 3rem) clamp(0.9rem, 4cqh, 1.4rem);
+      color: #fff;
+      font-size: clamp(1.25rem, 6.5cqh, 2.25rem);
+      font-weight: 800;
+      font-style: italic;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: linear-gradient(100deg, #e5383b 0%, #ff6a3d 55%, #ffb02e 100%);
+      box-shadow:
+        0 6px 0 #8f1d20,
+        0 14px 30px rgb(229 56 59 / 0.45);
+      transform: skewX(-12deg);
+      transition:
+        transform 120ms,
+        box-shadow 120ms,
+        filter 120ms;
+      animation: rev 1.6s ease-in-out infinite;
+      cursor: pointer;
     }
-    .demo-button {
-      border: 1px solid rgb(255 255 255 / 0.3);
+    .start-button > .label {
+      display: inline-block;
+      transform: skewX(12deg);
+      text-shadow: 0 2px 0 rgb(0 0 0 / 0.28);
     }
-    .start-button:hover,
-    .demo-button:hover {
-      filter: brightness(1.15);
+    .start-button:hover {
+      transform: skewX(-12deg) scale(1.06);
+      filter: brightness(1.1);
+    }
+    .start-button:active {
+      transform: skewX(-12deg) translateY(4px);
+      box-shadow:
+        0 2px 0 #8f1d20,
+        0 6px 14px rgb(229 56 59 / 0.45);
+    }
+    .start-button:focus-visible {
+      outline: 3px solid #fff;
+      outline-offset: 4px;
+    }
+    /* Traînées de vitesse qui défilent de droite à gauche, et reflet qui balaie le bouton. */
+    .streaks {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(105deg, transparent 40%, rgb(255 255 255 / 0.45) 50%, transparent 60%) 0 0 / 60% 100%
+          no-repeat,
+        repeating-linear-gradient(
+          90deg,
+          transparent 0 22px,
+          rgb(255 255 255 / 0.2) 22px 24px,
+          transparent 24px 46px,
+          rgb(255 255 255 / 0.12) 46px 47px,
+          transparent 47px 78px
+        );
+      animation:
+        streaks 0.45s linear infinite,
+        sweep 2.2s ease-in-out infinite;
+    }
+    .chevrons {
+      display: inline-flex;
+      transform: skewX(12deg);
+    }
+    .chevrons i {
+      width: 0.55em;
+      height: 0.9em;
+      margin-left: -0.12em;
+      background: #fff;
+      clip-path: polygon(0 0, 45% 0, 100% 50%, 45% 100%, 0 100%, 55% 50%);
+      animation: chevron 0.9s ease-in-out infinite;
+    }
+    .chevrons i:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+    .chevrons i:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+    /* Damier d'arrivée qui roule le long du bord bas. */
+    .checker {
+      position: absolute;
+      inset: auto 0 0;
+      height: 0.5rem;
+      background: conic-gradient(#fff 25%, #15151a 0 50%, #fff 0 75%, #15151a 0) 0 0 / 1rem 1rem;
+      animation: checker 0.6s linear infinite;
+    }
+    @keyframes streaks {
+      to {
+        background-position:
+          0 0,
+          -78px 0;
+      }
+    }
+    @keyframes sweep {
+      0% {
+        background-position:
+          -80% 0,
+          0 0;
+      }
+      60%,
+      100% {
+        background-position:
+          180% 0,
+          0 0;
+      }
+    }
+    @keyframes chevron {
+      0%,
+      100% {
+        opacity: 0.25;
+      }
+      40% {
+        opacity: 1;
+      }
+    }
+    @keyframes checker {
+      to {
+        background-position: -2rem 0;
+      }
+    }
+    @keyframes rev {
+      0%,
+      100% {
+        box-shadow:
+          0 6px 0 #8f1d20,
+          0 14px 30px rgb(229 56 59 / 0.35);
+      }
+      50% {
+        box-shadow:
+          0 6px 0 #8f1d20,
+          0 14px 44px rgb(255 140 50 / 0.7);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .start-button,
+      .streaks,
+      .chevrons i,
+      .checker {
+        animation: none;
+      }
     }
   `,
 })
@@ -422,8 +555,8 @@ export default class Day02Loop {
   }
 
   /**
-   * Place le circuit sous le HUD, soit au-dessus des manettes, soit entre elles (on garde ce qui le
-   * montre le plus grand), puis tire les fils du bornier jusqu'aux manettes et redessine.
+   * Place le circuit sous le HUD et au-dessus du couloir des fils, puis tire les fils du bornier
+   * jusqu'aux manettes (sans jamais croiser la piste) et redessine.
    */
   private layout(): void {
     const { width, height } = this.stage();
@@ -431,22 +564,21 @@ export default class Day02Loop {
     // Mesures dans le repère de la scène (offset*), insensibles à sa rotation.
     const top = this.header().nativeElement.offsetHeight;
     const pads = this.pads().map((p) => p.nativeElement);
-    const padTop = Math.min(height, ...pads.map((p) => p.offsetTop));
-    const padLeft = pads[0] ? pads[0].offsetLeft + pads[0].offsetWidth : 0;
-    const padRight = pads[1] ? pads[1].offsetLeft : width;
 
-    const fits = [
-      { x: 0, y: top, w: width, h: padTop - top },
-      { x: padLeft, y: top, w: padRight - padLeft, h: height - top },
-    ].map(({ x, y, w, h }): Fit => {
-      const fit = fitBox(this.bounds, Math.max(1, w), Math.max(1, h), PADDING);
-      return { scale: fit.scale, tx: fit.tx + x, ty: fit.ty + y };
-    });
-    const fit = fits[0].scale >= fits[1].scale ? fits[0] : fits[1];
+    // Le circuit tient au-dessus du couloir où courent les fils, à hauteur des manettes. Il remonte un
+    // peu sous le HUD : les cartes ne couvrent que les coins du décor.
+    const lane = Math.min(height, ...pads.map((p) => p.offsetTop + p.offsetHeight / 2));
+    const rise = top * RISE;
+    const box = fitBox(this.bounds, width, Math.max(1, lane - top + WIRE_OVERLAP), PADDING, TILT);
+    const fit: Fit = { ...box, ty: box.ty + top - rise };
 
+    // Chaque fil entre dans sa manette par le côté tourné vers le centre.
     const wires = pads.map((pad, i): Wire => ({
       from: plugPosition(fit, i as 0 | 1),
-      to: { x: pad.offsetLeft + pad.offsetWidth / 2, y: pad.offsetTop + 4 },
+      to: {
+        x: i === 0 ? pad.offsetLeft + pad.offsetWidth - 6 : pad.offsetLeft + 6,
+        y: pad.offsetTop + pad.offsetHeight / 2,
+      },
     }));
     this.scene.layout(width, height, this.circuit, fit, [wires[0] ?? null, wires[1] ?? null]);
     this.draw();
@@ -503,6 +635,11 @@ export default class Day02Loop {
 
   protected onKeydown(event: KeyboardEvent): void {
     if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key.toLowerCase() === DEMO_KEY) {
+      // La démo se lance au clavier, tant qu'aucune course n'est en cours.
+      if (this.race.phase === 'idle' || this.race.phase === 'finished') this.start(true);
+      return;
+    }
     const player = this.playerFor(event.key);
     if (player === null) return;
     event.preventDefault();

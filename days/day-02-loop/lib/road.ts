@@ -4,7 +4,7 @@
  * départ, le bornier où se branchent les manettes, le pont au croisement et le portique START.
  */
 import { circle, dropShadow, noShadow, pixelScale, roundRect } from './paint';
-import { Box, Bridge, Loop, Point, Track, elevation, grow } from './track';
+import { Box, Bridge, Loop, Point, Track, elevation, grow, rotate } from './track';
 
 /** Largeur de la route, et écart entre le milieu de la route et la fente de chaque voie. */
 export const ROAD_WIDTH = 70;
@@ -15,9 +15,23 @@ export const ROAD_MARGIN = 16;
 /** Bande de sol réservée au décor tout autour du circuit. */
 export const SCENERY_MARGIN = 24;
 
-/** Ce qui doit tenir à l'écran : le circuit, ses glissières et le décor qui l'entoure. */
+/** Le circuit est posé de travers, comme jeté sur le sol : une rotation de quelques degrés. */
+export const TILT = (4 * Math.PI) / 180;
+
+/**
+ * Ce qui doit tenir à l'écran : le circuit tourné de `TILT`, ses glissières et le décor qui l'entoure.
+ * Boîte dans le repère tourné (celle que `fitBox` centre).
+ */
 export function circuitBounds(track: Track): Box {
-  return grow(track.box, ROAD_WIDTH / 2 + ROAD_MARGIN + SCENERY_MARGIN);
+  const box: Box = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  for (const point of track.points) {
+    const p = rotate(point, TILT);
+    box.minX = Math.min(box.minX, p.x);
+    box.minY = Math.min(box.minY, p.y);
+    box.maxX = Math.max(box.maxX, p.x);
+    box.maxY = Math.max(box.maxY, p.y);
+  }
+  return grow(box, ROAD_WIDTH / 2 + ROAD_MARGIN + SCENERY_MARGIN);
 }
 
 /** Le bornier, posé dans le creux sous le croisement, et ses deux prises (joueur 1 à gauche). */
@@ -257,6 +271,20 @@ export function drawLeds(
 export function bridgeSpan(bridge: Bridge): [number, number] {
   const half = bridge.flat + bridge.ramp;
   return [bridge.center - half, bridge.center + half];
+}
+
+/**
+ * Une voiture passe au-dessus du tablier un peu avant d'arriver à sa rampe et un peu après l'avoir quittée :
+ * son nez ou sa queue, qui dépassent du point où elle est repérée, ne sont ainsi jamais recouverts par le
+ * tablier (il a la même couleur que la route : la voiture semblerait en être coupée).
+ */
+export const BRIDGE_MARGIN = 30;
+
+/** Vrai quand la voiture à la distance `distance` (tours compris) se dessine par-dessus le pont. */
+export function isOnBridge(bridge: Bridge, length: number, distance: number): boolean {
+  const [from, to] = bridgeSpan(bridge);
+  const lap = ((distance % length) + length) % length;
+  return lap >= from - BRIDGE_MARGIN && lap <= to + BRIDGE_MARGIN;
 }
 
 /**
