@@ -1,5 +1,7 @@
 # Jour 3 : Bloom
 
+![Aperçu](./preview.gif)
+
 Un tunnel de cerisiers en fleur au-dessus du canal Suimon, à Ōgaki : le ciel, la lumière, la pluie et le vent suivent en direct l'heure et la météo de là-bas.
 
 ## L'idée
@@ -39,7 +41,7 @@ La météo vient d'[Open-Meteo](https://open-meteo.com/), gratuit et sans clé (
 - le vent et les rafales ;
 - les heures de lever et de coucher.
 
-La lumière, elle, suit la hauteur du soleil que je calcule sur place avec les formules de la NOAA ([`lib/solar.ts`](./lib/solar.ts)). [`lib/look.ts`](./lib/look.ts) en tire toute la palette (ciel, montagnes, pont) sous forme de variables CSS, plus une teinte pour les calques de cerisiers. Le coucher donné par l'API allume les lanternes, qui restent allumées jusqu'au lever du soleil.
+La lumière, elle, suit la hauteur du soleil que je calcule sur place avec les formules de la NOAA ([`lib/solar.ts`](./lib/solar.ts)). [`lib/look.ts`](./lib/look.ts) en tire toute la palette (ciel, montagnes, pont) sous forme de variables CSS, plus une teinte pour les calques de cerisiers. Le coucher donné par l'API allume les lanternes, qui restent allumées jusqu'au lever du soleil. La lune est calculée de la même façon (série abrégée, précise à ~0,3°) : elle se lève, traverse le ciel et se couche à sa vraie place, sa phase est celle du jour, et son croissant est incliné vers le soleil comme on le verrait depuis le pont.
 
 Le vent météo dit d'où il vient. Comme on regarde plein ouest, je le projette dans le repère de l'écran ([`lib/wind.ts`](./lib/wind.ts)) :
 
@@ -59,4 +61,3 @@ Bloom, c'est la floraison, mais aussi la lumière qui bave autour des lanternes 
 ## Pour aller plus loin
 
 - Suivre la vraie saison : des bourgeons en mars, des feuilles vertes en été, rouges en automne.
-- Le GIF d'aperçu n'est pas encore là : `npm run gif -- 3` (la capture lance la visite).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OGAKI } from './ogaki';
-import { moonPhase, sunPosition } from './solar';
+import { moonState, sunPosition } from './solar';
 
 const at = (iso: string) => Date.parse(iso);
 const sun = (iso: string) => sunPosition(at(iso), OGAKI.latitude, OGAKI.longitude);
@@ -32,10 +32,43 @@ describe('sunPosition', () => {
   });
 });
 
-describe('moonPhase', () => {
+describe('moonState', () => {
+  const moon = (iso: string) => moonState(at(iso), OGAKI.latitude, OGAKI.longitude);
+
   it('reconnaît une pleine lune et une nouvelle lune connues', () => {
     // Pleine lune du 26 septembre 2026 (16 h 49 UTC), nouvelle lune du 11 septembre 2026 (03 h 27 UTC).
-    expect(moonPhase(at('2026-09-26T16:49:00Z')).illumination).toBeGreaterThan(0.97);
-    expect(moonPhase(at('2026-09-11T03:27:00Z')).illumination).toBeLessThan(0.03);
+    expect(moon('2026-09-26T16:49:00Z').illumination).toBeGreaterThan(0.97);
+    expect(moon('2026-09-11T03:27:00Z').illumination).toBeLessThan(0.03);
+  });
+
+  it('place la pleine lune à l’opposé du soleil : levée à l’est au coucher, couchée à l’ouest à l’aube', () => {
+    // Le soleil se couche à 17 h 35 JST (08 h 35 UTC) et se lève à 05 h 49 JST (20 h 49 UTC la veille).
+    const rise = moon('2026-09-26T08:35:00Z');
+    expect(rise.elevation).toBeGreaterThan(-3);
+    expect(rise.elevation).toBeLessThan(6);
+    expect(rise.azimuth).toBeGreaterThan(80);
+    expect(rise.azimuth).toBeLessThan(100);
+    const set = moon('2026-09-26T20:45:00Z');
+    expect(set.elevation).toBeGreaterThan(0);
+    expect(set.elevation).toBeLessThan(8);
+    expect(set.azimuth).toBeGreaterThan(260);
+    expect(set.azimuth).toBeLessThan(285);
+    // Au milieu de la nuit, haute dans le ciel du sud.
+    expect(moon('2026-09-26T14:30:00Z').elevation).toBeGreaterThan(50);
+  });
+
+  it('éclaire le côté droit en lune croissante et le côté gauche en lune décroissante', () => {
+    // Premier quartier (≈ 18 septembre) vu le soir : le soleil est à l'ouest, côté droit éclairé.
+    const waxing = moon('2026-09-18T10:00:00Z');
+    expect(waxing.phase).toBeGreaterThan(0.2);
+    expect(waxing.phase).toBeLessThan(0.3);
+    expect(waxing.brightLimb).toBeGreaterThan(60);
+    expect(waxing.brightLimb).toBeLessThan(150);
+    // Dernier quartier (≈ 3 octobre) vu au petit matin, le soleil étant à l'est : côté gauche.
+    const waning = moon('2026-10-02T20:00:00Z');
+    expect(waning.phase).toBeGreaterThan(0.7);
+    expect(waning.phase).toBeLessThan(0.8);
+    expect(waning.brightLimb).toBeGreaterThan(210);
+    expect(waning.brightLimb).toBeLessThan(300);
   });
 });

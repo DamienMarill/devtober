@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { luminance, parseHex } from './color';
 import { cityLights, computeLook } from './look';
-import { moonPhase } from './solar';
+import { OGAKI } from './ogaki';
+import { moonState } from './solar';
 import { toConditions } from './weather';
 
 const at = (iso: string) => Date.parse(iso);
@@ -12,7 +13,7 @@ const SUNSETS = [at('2026-10-03T17:35:09+09:00')];
 function look(elevation: number, code = 0, clouds?: number) {
   return computeLook({
     sun: { elevation, azimuth: 250 },
-    moon: moonPhase(at('2026-10-03T12:00:00Z')),
+    moon: moonState(at('2026-09-26T09:30:00Z'), OGAKI.latitude, OGAKI.longitude),
     lights: { lanterns: elevation < 0 ? 1 : 0 },
     conditions: toConditions({ code, cloudCover: clouds }),
   });
@@ -52,5 +53,27 @@ describe('computeLook', () => {
   it('montre le soleil au-dessus de l’horizon et le cache dessous', () => {
     expect(look(10).sun.alpha).toBeGreaterThan(0.5);
     expect(look(-6).sun.alpha).toBe(0);
+  });
+
+  it('pose la lune là où elle est, de nuit seulement et au-dessus de l’horizon', () => {
+    const moonLook = (sunElevation: number, iso: string) => {
+      const moon = moonState(at(iso), OGAKI.latitude, OGAKI.longitude);
+      return computeLook({
+        sun: { elevation: sunElevation, azimuth: 250 },
+        moon,
+        lights: { lanterns: 1 },
+        conditions: toConditions({ code: 0 }),
+      }).moon;
+    };
+    // Pleine lune qui se lève à l'est (17 h 30 JST) : sous l'horizon à l'ouest, rien à voir.
+    const rising = moonLook(-12, '2026-09-26T09:30:00Z');
+    expect(rising.alpha).toBeGreaterThan(0.5);
+    // Plus tard, elle est plus haute : donc plus haut dans le ciel (y plus petit).
+    const higher = moonLook(-40, '2026-09-26T12:00:00Z');
+    expect(higher.y).toBeLessThan(rising.y);
+    // Après son coucher (6 h 30 JST, soleil encore bas) : elle a disparu.
+    expect(moonLook(-3, '2026-09-26T21:30:00Z').alpha).toBe(0);
+    // En plein jour, même au-dessus de l'horizon, pas de lune.
+    expect(moonLook(45, '2026-09-26T03:00:00Z').alpha).toBe(0);
   });
 });

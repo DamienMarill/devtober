@@ -6,8 +6,8 @@ import { seeded } from '../lib/random';
 /** Période de la bande de nuages (unités) : elle est dessinée deux fois et défile en boucle. */
 export const CLOUD_PERIOD = 2400;
 
-/** Lune : position fixe dans la fenêtre de ciel, rayon (unités). */
-const MOON = { x: 820, y: 110, r: 16 };
+/** Rayon de la lune (unités). Elle est dessinée autour de l'origine, puis posée et inclinée par le CSS. */
+const MOON_RADIUS = 16;
 
 const random = seeded(77);
 /** Les étoiles : positions tirées une fois pour toutes, dans le haut du ciel. */
@@ -77,7 +77,9 @@ const MANY = cloudSet(14, 9, -60, 470);
     >
       <path class="stars" [attr.d]="starsA" style="fill: #fff8ef; opacity: var(--stars)" />
       <path class="stars twinkle" [attr.d]="starsB" style="fill: #fff8ef; opacity: var(--stars)" />
-      <g style="opacity: var(--moon)">
+      <g
+        style="opacity: var(--moon, 0); transform: translate(calc(var(--moon-x, 0) * 1px), calc(var(--moon-y, 0) * 1px)) rotate(calc(var(--moon-tilt, 0) * 1deg))"
+      >
         <path [attr.d]="moonDisc" style="fill: var(--sky-mid); opacity: 0.45" />
         <path [attr.d]="moonLit()" style="fill: #fff6e0" />
       </g>
@@ -147,7 +149,7 @@ export class Sky {
   protected readonly starsB = STARS_B;
   protected readonly few = FEW;
   protected readonly many = MANY;
-  protected readonly moonDisc = circle(MOON.x, MOON.y, MOON.r);
+  protected readonly moonDisc = circle(0, 0, MOON_RADIUS);
 
   protected readonly box = computed(() => viewBox(this.camera()));
   private readonly clouds = viewChild.required<ElementRef<SVGSVGElement>>('clouds');
@@ -178,15 +180,18 @@ export class Sky {
     };
   });
 
-  /** La partie éclairée de la lune (hémisphère nord : croissant à droite quand elle grandit). */
+  /** La partie éclairée de la lune, dessinée côté droit ; `--moon-tilt` la tourne vers le soleil. */
   protected readonly moonLit = computed(() => moonPath(this.moonPhase()));
 }
 
-export function moonPath(phase: number, { x, y, r } = MOON): string {
+/**
+ * Le côté éclairé de la lune autour de l'origine, toujours à droite : la forme ne dépend que de la part
+ * éclairée (croissant, quartier, gibbeuse), `phase` et `1 - phase` donnent le même dessin. Le sens, lui,
+ * vient de la rotation.
+ */
+export function moonPath(phase: number, r = MOON_RADIUS): string {
   const k = Math.cos(2 * Math.PI * phase);
   const rx = Math.abs(k) * r;
-  const waxing = phase < 0.5;
-  const outer = waxing ? 1 : 0;
-  const inner = waxing ? (k > 0 ? 0 : 1) : k > 0 ? 1 : 0;
-  return `M${fmt(x)} ${fmt(y - r)}A${fmt(r)} ${fmt(r)} 0 0 ${outer} ${fmt(x)} ${fmt(y + r)}A${fmt(rx)} ${fmt(r)} 0 0 ${inner} ${fmt(x)} ${fmt(y - r)}Z`;
+  const inner = k > 0 ? 0 : 1;
+  return `M0 ${fmt(-r)}A${fmt(r)} ${fmt(r)} 0 0 1 0 ${fmt(r)}A${fmt(rx)} ${fmt(r)} 0 0 ${inner} 0 ${fmt(-r)}Z`;
 }

@@ -59,21 +59,117 @@ export function sunPosition(ms: number, latitude: number, longitude: number): Su
   return { elevation, azimuth };
 }
 
-/** Nouvelle lune de référence (6 janvier 2000, 18 h 14 UTC) et durée d'une lunaison, en jours. */
-const NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14);
-const SYNODIC_DAYS = 29.530588853;
-
-export interface MoonPhase {
+export interface MoonState {
+  /** Hauteur au-dessus de l'horizon (parallaxe et réfraction comprises), en degrés. */
+  elevation: number;
+  /** Azimut en degrés depuis le nord, dans le sens horaire (comme pour le soleil). */
+  azimuth: number;
   /** Avancée de la lunaison : 0 = nouvelle lune, 0,5 = pleine lune. */
   phase: number;
   /** Part éclairée du disque (0–1). */
   illumination: number;
+  /**
+   * Direction du côté éclairé vu d'ici, en degrés dans le sens horaire depuis le haut du disque
+   * (90 = côté droit, 270 = côté gauche). Elle suit l'inclinaison de la lune dans le ciel : à l'ouest
+   * le soir, le croissant se couche sur le côté ; le matin, c'est l'inverse.
+   */
+  brightLimb: number;
 }
 
-export function moonPhase(ms: number): MoonPhase {
-  const days = (ms - NEW_MOON_MS) / 86_400_000;
-  const phase = mod(days / SYNODIC_DAYS, 1);
-  return { phase, illumination: (1 - Math.cos(2 * Math.PI * phase)) / 2 };
+/** Obliquité de l'écliptique (J2000) et distance moyenne Terre-Soleil (km), rayon de la Terre (km). */
+const OBLIQUITY = 23.4397 * RAD;
+const SUN_DISTANCE_KM = 149_598_000;
+const EARTH_RADIUS_KM = 6371;
+
+function rightAscension(lon: number, lat: number): number {
+  return Math.atan2(
+    Math.sin(lon) * Math.cos(OBLIQUITY) - Math.tan(lat) * Math.sin(OBLIQUITY),
+    Math.cos(lon),
+  );
+}
+
+function declination(lon: number, lat: number): number {
+  return Math.asin(
+    Math.sin(lat) * Math.cos(OBLIQUITY) + Math.cos(lat) * Math.sin(OBLIQUITY) * Math.sin(lon),
+  );
+}
+
+/** Soleil, en coordonnées équatoriales (rad). `d` : jours depuis J2000. */
+function sunEquatorial(d: number): { ra: number; dec: number } {
+  const anomaly = RAD * (357.5291 + 0.98560028 * d);
+  const center =
+    RAD *
+    (1.9148 * Math.sin(anomaly) + 0.02 * Math.sin(2 * anomaly) + 0.0003 * Math.sin(3 * anomaly));
+  const lon = anomaly + center + RAD * 102.9372 + Math.PI;
+  return { ra: rightAscension(lon, 0), dec: declination(lon, 0) };
+}
+
+/** Lune, en coordonnées équatoriales (rad) et distance (km) : série abrégée, précise à ~0,3°. */
+function moonEquatorial(d: number): { ra: number; dec: number; distance: number } {
+  const meanLon = RAD * (218.316 + 13.176396 * d);
+  const anomaly = RAD * (134.963 + 13.064993 * d);
+  const node = RAD * (93.272 + 13.22935 * d);
+  const lon = meanLon + RAD * 6.289 * Math.sin(anomaly);
+  const lat = RAD * 5.128 * Math.sin(node);
+  return {
+    ra: rightAscension(lon, lat),
+    dec: declination(lon, lat),
+    distance: 385_001 - 20_905 * Math.cos(anomaly),
+  };
+}
+
+/** Position, phase et inclinaison du croissant de la lune à l'instant `ms`, vue depuis le lieu donné. */
+export function moonState(ms: number, latitude: number, longitude: number): MoonState {
+  const d = ms / 86_400_000 - 10_957.5;
+  const sun = sunEquatorial(d);
+  const moon = moonEquatorial(d);
+
+  // Position dans le ciel : angle horaire, puis hauteur et azimut.
+  const lat = latitude * RAD;
+  const hourAngle = RAD * (280.16 + 360.9856235 * d + longitude) - moon.ra;
+  const sinElevation =
+    Math.sin(lat) * Math.sin(moon.dec) + Math.cos(lat) * Math.cos(moon.dec) * Math.cos(hourAngle);
+  let elevation = Math.asin(sinElevation);
+  // La lune est si proche que la parallaxe compte (~1° à l'horizon) ; la réfraction la relève un peu.
+  elevation -= (EARTH_RADIUS_KM / moon.distance) * Math.cos(elevation);
+  const h = Math.max(elevation, 0);
+  elevation += 0.0002967 / Math.tan(h + 0.00312536 / (h + 0.08901179));
+  const azimuth = mod(
+    Math.atan2(
+      Math.sin(hourAngle),
+      Math.cos(hourAngle) * Math.sin(lat) - Math.tan(moon.dec) * Math.cos(lat),
+    ) /
+      RAD +
+      180,
+    360,
+  );
+
+  // Phase : élongation de la lune au soleil, et direction du côté éclairé (angle de position du limbe).
+  const raGap = sun.ra - moon.ra;
+  const elongation = Math.acos(
+    Math.sin(sun.dec) * Math.sin(moon.dec) + Math.cos(sun.dec) * Math.cos(moon.dec) * Math.cos(raGap),
+  );
+  const incidence = Math.atan2(
+    SUN_DISTANCE_KM * Math.sin(elongation),
+    moon.distance - SUN_DISTANCE_KM * Math.cos(elongation),
+  );
+  const limbAngle = Math.atan2(
+    Math.cos(sun.dec) * Math.sin(raGap),
+    Math.sin(sun.dec) * Math.cos(moon.dec) - Math.cos(sun.dec) * Math.sin(moon.dec) * Math.cos(raGap),
+  );
+  const parallactic = Math.atan2(
+    Math.sin(hourAngle),
+    Math.tan(lat) * Math.cos(moon.dec) - Math.sin(moon.dec) * Math.cos(hourAngle),
+  );
+  return {
+    elevation: elevation / RAD,
+    azimuth,
+    phase: 0.5 + (0.5 * incidence * (limbAngle < 0 ? -1 : 1)) / Math.PI,
+    illumination: (1 + Math.cos(incidence)) / 2,
+    // Angle de position (vers l'est depuis le nord) moins l'angle parallactique = angle au zénith ;
+    // on le veut dans le sens horaire de l'écran, donc de signe opposé.
+    brightLimb: mod(-(limbAngle - parallactic) / RAD, 360),
+  };
 }
 
 function mod(a: number, n: number): number {

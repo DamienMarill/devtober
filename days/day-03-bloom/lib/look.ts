@@ -1,6 +1,6 @@
 import { Rgb, add, desaturate, light, luminance, mix, parseHex, rgba, toHex } from './color';
 import { skyPoint } from './projection';
-import { MoonPhase, SunPosition } from './solar';
+import { MoonState, SunPosition } from './solar';
 import { Conditions } from './weather';
 
 /**
@@ -165,7 +165,7 @@ export function cityLights(
 
 export interface LookInput {
   sun: SunPosition;
-  moon: MoonPhase;
+  moon: MoonState;
   lights: Lights;
   conditions: Conditions;
 }
@@ -176,7 +176,8 @@ export interface Look {
   /** Le soleil dans la composition et son opacité. */
   sun: { x: number; y: number; alpha: number; glow: string };
   stars: number;
-  moon: { alpha: number; phase: number; illumination: number };
+  /** La lune : opacité, place dans la composition, inclinaison (degrés, sens horaire) et phase. */
+  moon: { alpha: number; x: number; y: number; tilt: number; phase: number; illumination: number };
   /** Couleurs reprises par les canvases (pétales, pluie). */
   petal: { hi: string; mid: string; shade: string; heart: string };
   rain: string;
@@ -269,6 +270,7 @@ export function computeLook({ sun, moon, lights, conditions }: LookInput): Look 
   vars['--fog'] = String(round(fog));
 
   const [sx, sy] = skyPoint(sun.azimuth, sun.elevation);
+  const [mx, my] = skyPoint(moon.azimuth, moon.elevation);
   const night = clamp01((-sun.elevation - 4) / 8);
   const open = (1 - c.clouds ** 0.8) * (1 - fog);
   const hazeColor = toHex(horizon);
@@ -281,7 +283,16 @@ export function computeLook({ sun, moon, lights, conditions }: LookInput): Look 
       glow: toHex(scale(mix(parseHex(key.glow), grey, cloudy * 0.7), dim)),
     },
     stars: round(night * open),
-    moon: { alpha: round(clamp01((-sun.elevation + 1) / 7) * open), ...moon },
+    // La lune n'apparaît que de nuit et au-dessus de l'horizon ; le croissant est dessiné côté droit,
+    // on le fait pivoter vers le soleil (90° = déjà à droite).
+    moon: {
+      alpha: round(clamp01((-sun.elevation + 1) / 7) * clamp01((moon.elevation + 3) / 3) * open),
+      x: round(mx),
+      y: round(my),
+      tilt: round(moon.brightLimb - 90),
+      phase: moon.phase,
+      illumination: moon.illumination,
+    },
     petal: {
       hi: vars['--petal-hi'],
       mid: vars['--petal-mid'],

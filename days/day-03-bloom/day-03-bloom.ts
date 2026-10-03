@@ -27,7 +27,7 @@ import { Overrides, parseOverrides } from './lib/overrides';
 import { PetalField } from './lib/petals';
 import { RainField } from './lib/rain';
 import { buildFond, buildPont, glows } from './lib/scenery';
-import { moonPhase, sunPosition } from './lib/solar';
+import { moonState, sunPosition } from './lib/solar';
 import { Stage } from './lib/stage';
 import { TOUR, tourAt } from './lib/tour';
 import {
@@ -198,7 +198,9 @@ export default class Day03Bloom {
     return c;
   });
 
-  protected readonly moonPhase = computed(() => moonPhase(this.status().now).phase);
+  protected readonly moonPhase = computed(
+    () => moonState(this.status().now, OGAKI.latitude, OGAKI.longitude).phase,
+  );
 
   /** Ce que lirait un lecteur d'écran : le lieu, l'heure, le temps qu'il fait. */
   protected readonly label = computed(() => {
@@ -421,7 +423,7 @@ export default class Day03Bloom {
       const sun = sunPosition(now, OGAKI.latitude, OGAKI.longitude);
       this.look = computeLook({
         sun,
-        moon: moonPhase(now),
+        moon: moonState(now, OGAKI.latitude, OGAKI.longitude),
         lights: cityLights(now, sun.elevation, weather?.sunrises ?? [], weather?.sunsets ?? []),
         conditions: c,
       });
@@ -490,6 +492,10 @@ export default class Day03Bloom {
       '--sun-glow': look.sun.glow,
       '--stars': String(look.stars),
       '--moon': String(look.moon.alpha),
+      // En unités de composition (le SVG du ciel a pour viewBox la composition), pas en pixels.
+      '--moon-x': String(look.moon.x),
+      '--moon-y': String(look.moon.y),
+      '--moon-tilt': String(look.moon.tilt),
     };
     const style = this.host.nativeElement.style;
     for (const [name, value] of Object.entries(vars)) {
