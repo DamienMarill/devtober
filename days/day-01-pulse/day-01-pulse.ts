@@ -11,6 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLoaderCircle, lucidePause, lucidePlay, lucideSearch } from '@ng-icons/lucide';
 import { CoverTheme, THEME_ROLES, themeFromCover } from './lib/cover-theme';
@@ -18,6 +19,7 @@ import { DeezerTrack, getTrack, searchTracks } from './lib/deezer';
 import type { Explosion } from './lib/explosion-detector';
 import { FireworksStage, burstSpec } from './lib/fireworks-stage';
 import { PulseAudio } from './lib/pulse-audio';
+import { TRACK_PARAM, parseTrackId } from './lib/shared-track';
 
 const DEBOUNCE_MS = 300;
 /** Titre proposé à l'arrivée : IRIS OUT, de Kenshi Yonezu (identifiant Deezer). */
@@ -243,6 +245,8 @@ export default class Day01Pulse {
   private readonly search = viewChild.required<ElementRef<HTMLElement>>('search');
   private readonly fx = viewChild.required<ElementRef<HTMLCanvasElement>>('fx');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   /** Panneau de debug : caché, visible avec `?debug` dans l'adresse. */
   protected readonly debug = new URLSearchParams(location.search).has('debug');
@@ -319,13 +323,23 @@ export default class Day01Pulse {
     // Un titre est déjà là à l'arrivée (pochette, thème, pré-analyse) : l'utilisateur n'a plus qu'à lancer la lecture.
     const arrival = new AbortController();
     destroyRef.onDestroy(() => arrival.abort());
-    getTrack(DEFAULT_TRACK_ID, arrival.signal)
-      .then((track) => {
-        if (this.audio.current()) return; // il a déjà choisi autre chose
-        this.audio.load(track);
-        this.query.set(`${track.title} · ${track.artist.name}`);
-      })
-      .catch(() => undefined); // sans titre par défaut, la page reste simplement vide
+    // Un lien partagé (`?track=<id>`) tombe directement sur son titre ; s'il est invalide ou introuvable, on retombe sur le défaut.
+    const shared = parseTrackId(this.route.snapshot.queryParamMap.get(TRACK_PARAM));
+    const loadArrival = async (): Promise<void> => {
+      let track: DeezerTrack | undefined;
+      if (shared && shared !== DEFAULT_TRACK_ID) {
+        track = await getTrack(shared, arrival.signal).catch(() => undefined);
+        if (!track?.preview) {
+          track = undefined;
+          this.setSharedTrack(null); // lien invalide : on nettoie l'adresse
+        }
+      }
+      track ??= await getTrack(DEFAULT_TRACK_ID, arrival.signal);
+      if (this.audio.current()) return; // il a déjà choisi autre chose
+      this.audio.load(track);
+      this.query.set(`${track.title} · ${track.artist.name}`);
+    };
+    loadArrival().catch(() => undefined); // sans titre par défaut, la page reste simplement vide
 
     afterNextRender(() => {
       const stage = new FireworksStage(this.fx().nativeElement);
@@ -388,7 +402,18 @@ export default class Day01Pulse {
     if (!track.preview) return;
     this.open.set(false);
     this.query.set(`${track.title} · ${track.artist.name}`);
+    this.setSharedTrack(track.id === DEFAULT_TRACK_ID ? null : track.id);
     void this.audio.play(track).catch((e) => console.error('Lecture impossible', e));
+  }
+
+  /** Reflète le titre dans l'adresse (`?track=<id>`) pour que le lien partagé y tombe ; null retire le paramètre. */
+  private setSharedTrack(id: number | null): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { [TRACK_PARAM]: id },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   protected onOutsidePointer(event: PointerEvent): void {

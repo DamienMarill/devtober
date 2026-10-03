@@ -10,6 +10,7 @@ import { HlmTooltipImports } from '@spartan-ng/helm/tooltip';
 import { filter, map } from 'rxjs';
 import { DAYS, PUBLISHED_DAYS, padDay } from '../days';
 import { ReadmeButton } from './readme-button';
+import { ShareButton } from './share-button';
 
 const REPO = 'https://github.com/DamienMarill/devtober';
 
@@ -30,6 +31,7 @@ function activeDay(route: ActivatedRouteSnapshot): number | null {
     HlmButtonImports,
     HlmTooltipImports,
     ReadmeButton,
+    ShareButton,
   ],
   providers: [provideIcons({ lucideChevronLeft, lucideChevronRight, lucideGithub })],
   host: {
@@ -101,6 +103,7 @@ function activeDay(route: ActivatedRouteSnapshot): number | null {
           [dir]="'days/' + d.slug"
           [load]="d.entry!.readme"
         />
+        <app-share-button [title]="'Devtober · #' + pad(d.number) + ' ' + d.word" />
       } @else {
         <a
           hlmBtn
@@ -121,6 +124,7 @@ function activeDay(route: ActivatedRouteSnapshot): number | null {
           [load]="projectReadme"
           tooltip="À propos du projet"
         />
+        <app-share-button title="Devtober 2026" />
       }
     </div>
   `,
