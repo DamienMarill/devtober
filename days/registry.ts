@@ -47,5 +47,12 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     // La touche T lance la démo : deux robots font la course ; 3 s de décompte, trois tours en ~22 s, puis le podium.
     capture: { click: null, key: 't', seconds: 30 },
   },
+  3: {
+    component: () => import('./day-03-bloom/day-03-bloom').then((m) => m.default),
+    readme: () => import('./day-03-bloom/README.md').then((m) => m.default),
+    // La touche T lance la visite : une journée à Ōgaki en 30 s (aube, averse, coucher, nuit). On laisse
+    // aux cerisiers le temps de se peindre avant.
+    capture: { click: null, key: 't', seconds: 30, settle: 5000 },
+  },
   // new-day:insert
 };
