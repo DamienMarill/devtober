@@ -32,6 +32,8 @@ export function levels(c: Conditions, wind: number, gust: number, windX: number)
 }
 
 const SMOOTH = 0.6;
+/** Volume général (0–1) : tout passe par lui, tonnerre compris. */
+const VOLUME = 0.3;
 
 export class Ambience {
   private ctx?: AudioContext;
@@ -49,7 +51,7 @@ export class Ambience {
   async start(): Promise<void> {
     if (!this.ctx) this.build();
     await this.ctx!.resume();
-    this.master!.gain.setTargetAtTime(0.9, this.ctx!.currentTime, 0.8);
+    this.master!.gain.setTargetAtTime(VOLUME, this.ctx!.currentTime, 0.8);
   }
 
   stop(): void {

@@ -39,7 +39,7 @@ La météo vient d'[Open-Meteo](https://open-meteo.com/), gratuit et sans clé (
 - le vent et les rafales ;
 - les heures de lever et de coucher.
 
-La lumière, elle, suit la hauteur du soleil que je calcule sur place avec les formules de la NOAA ([`lib/solar.ts`](./lib/solar.ts)). [`lib/look.ts`](./lib/look.ts) en tire toute la palette (ciel, montagnes, pont) sous forme de variables CSS, plus une teinte pour les calques de cerisiers. Le coucher donné par l'API allume les lanternes, qui s'éteignent à 22 h.
+La lumière, elle, suit la hauteur du soleil que je calcule sur place avec les formules de la NOAA ([`lib/solar.ts`](./lib/solar.ts)). [`lib/look.ts`](./lib/look.ts) en tire toute la palette (ciel, montagnes, pont) sous forme de variables CSS, plus une teinte pour les calques de cerisiers. Le coucher donné par l'API allume les lanternes, qui restent allumées jusqu'au lever du soleil.
 
 Le vent météo dit d'où il vient. Comme on regarde plein ouest, je le projette dans le repère de l'écran ([`lib/wind.ts`](./lib/wind.ts)) :
 
@@ -48,7 +48,7 @@ const rel = ((from + 180 - heading) * Math.PI) / 180;
 return { x: clean(Math.sin(rel) * speed), z: clean(Math.cos(rel) * speed) };
 ```
 
-Les pétales ([`lib/petals.ts`](./lib/petals.ts)) naissent dans les fleurs ou au-dessus du cadre, tombent à environ 1 m/s en culbutant et suivent le vent. Une seule boucle `requestAnimationFrame` fait tout bouger ; aucun signal ne change à chaque image.
+Les pétales ([`lib/petals.ts`](./lib/petals.ts)) naissent dans les fleurs, au-dessus du cadre ou, quand le vent souffle, sur le bord d'où il vient. Ils flottent à environ 0,25 m/s dans l'air calme en se balançant, et suivent le vent. Une seule boucle `requestAnimationFrame` fait tout bouger ; aucun signal ne change à chaque image.
 
 Le bouton en haut à droite lance une ambiance synthétisée en WebAudio à partir de bruit filtré : rivière, vent, pluie, tonnerre ([`lib/ambience.ts`](./lib/ambience.ts)). La touche T lance une visite d'une journée en 30 secondes. La touche D (ou `?debug` dans l'adresse) ouvre un panneau pour imposer l'heure, la météo et le vent, par exemple `?debug&time=18:40&weather=rain&wind=8,270`.
 

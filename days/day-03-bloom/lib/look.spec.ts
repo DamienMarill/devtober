@@ -19,10 +19,12 @@ function look(elevation: number, code = 0, clouds?: number) {
 }
 
 describe('cityLights', () => {
-  it('allume les lanternes au coucher du soleil donné par l’API, les éteint à 22 h', () => {
+  it('allume les lanternes au coucher du soleil donné par l’API et les garde toute la nuit', () => {
     expect(cityLights(at('2026-10-03T15:00:00+09:00'), 20, SUNRISES, SUNSETS).lanterns).toBe(0);
     expect(cityLights(at('2026-10-03T18:30:00+09:00'), -10, SUNRISES, SUNSETS).lanterns).toBe(1);
-    expect(cityLights(at('2026-10-03T22:30:00+09:00'), -30, SUNRISES, SUNSETS).lanterns).toBe(0);
+    expect(cityLights(at('2026-10-03T22:30:00+09:00'), -30, SUNRISES, SUNSETS).lanterns).toBe(1);
+    expect(cityLights(at('2026-10-03T03:00:00+09:00'), -40, [], SUNSETS).lanterns).toBe(1);
+    expect(cityLights(at('2026-10-03T06:30:00+09:00'), 5, SUNRISES, SUNSETS).lanterns).toBe(0);
   });
 
   it('se rabat sur la hauteur du soleil sans données', () => {

@@ -35,7 +35,27 @@ describe('PetalField', () => {
     expect(meanVx(left)).toBeLessThan(-2);
   });
 
-  it('les fait tomber à environ 1 m/s, plus vite sous la pluie', () => {
+  it('les fait naître aussi sur le côté d’où vient le vent, pas seulement en haut', () => {
+    const fromLeft = new PetalField([], seeded(6));
+    const fromRight = new PetalField([], seeded(6));
+    // Une seconde seulement : les pétales n'ont pas eu le temps de dériver loin de leur naissance.
+    run(fromLeft, 1, () => env({ x: 8, z: 0 }));
+    run(fromRight, 1, () => env({ x: -8, z: 0 }));
+    const lowOnEdge = (f: PetalField, edge: 'left' | 'right') =>
+      f.petals.filter((p) => {
+        const [px, py] = project(p.x, p.y, p.z);
+        const near = edge === 'left' ? px < VIEW.x + 150 : px > VIEW.x + VIEW.w - 150;
+        return near && py > VIEW.y + 250;
+      }).length;
+    expect(lowOnEdge(fromLeft, 'left')).toBeGreaterThan(0);
+    expect(lowOnEdge(fromRight, 'right')).toBeGreaterThan(0);
+    // Sans vent, rien n'entre par les côtés.
+    const calm = new PetalField([], seeded(6));
+    run(calm, 1, () => env());
+    expect(lowOnEdge(calm, 'left') + lowOnEdge(calm, 'right')).toBe(0);
+  });
+
+  it('les fait flotter à environ 0,25 m/s dans l’air calme, plus vite sous la pluie', () => {
     const dry = new PetalField(SOURCES, seeded(3));
     const wet = new PetalField(SOURCES, seeded(3));
     run(dry, 3, () => env());
@@ -44,8 +64,8 @@ describe('PetalField', () => {
       const air = f.petals.filter((p) => p.age > 1 && p.vy !== 0);
       return air.reduce((s, p) => s + p.vy, 0) / air.length;
     };
-    expect(meanVy(dry)).toBeLessThan(-0.6);
-    expect(meanVy(dry)).toBeGreaterThan(-1.6);
+    expect(meanVy(dry)).toBeLessThan(-0.12);
+    expect(meanVy(dry)).toBeGreaterThan(-0.5);
     expect(meanVy(wet)).toBeLessThan(meanVy(dry));
   });
 

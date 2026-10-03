@@ -54,6 +54,8 @@ const LOOK_FAST_MS = 100;
 const CANOPY_FAST_MS = 250;
 /** Dérive des nuages (unités par seconde et par m/s de vent latéral), et un minimum. */
 const CLOUD_DRIFT = 2.4;
+/** Part du vent réel appliquée au rendu (pétales, pluie, balancement, nuages) ; le son garde le vent réel. */
+const RENDER_WIND = 0.5;
 /** Temps de peinture des cerisiers accordé à chaque image (ms). */
 const PAINT_BUDGET_MS = 9;
 /** Éclairs : intervalle (s) entre deux coups. */
@@ -158,7 +160,8 @@ export default class Day03Bloom {
   protected readonly debug = signal(this.url.debug);
   protected readonly overrides = signal<Overrides>(this.url.overrides);
   protected readonly camera = signal<Camera>(frame(1600, 1000));
-  protected readonly sound = signal(false);
+  /** Le son est actif par défaut ; les navigateurs ne le laissent démarrer qu'après un premier geste. */
+  protected readonly sound = signal(true);
   /** Instant affiché, libellé et FPS : rafraîchis une fois par seconde, pas à chaque image. */
   protected readonly status = signal({ now: Date.now(), fps: 0 });
 
@@ -281,7 +284,10 @@ export default class Day03Bloom {
       observer.observe(element);
       const refresh = setInterval(() => this.weather.reload(), REFRESH_MS);
       this.frame = requestAnimationFrame((t) => this.tick(t));
+      const gesture = new AbortController();
+      this.startSoundOnLoad(gesture.signal);
       destroyRef.onDestroy(() => {
+        gesture.abort();
         observer.disconnect();
         clearInterval(refresh);
         cancelAnimationFrame(this.frame);
@@ -299,6 +305,20 @@ export default class Day03Bloom {
     const key = event.key.toLowerCase();
     if (key === 'd') this.debug.update((d) => !d);
     if (key === 't') this.startTour();
+  }
+
+  /**
+   * Tente de lancer le son dès le chargement ; si le navigateur le bloque (aucun geste encore), il
+   * démarre au premier clic ou à la première touche, tant que le son n'a pas été coupé entre-temps.
+   */
+  private startSoundOnLoad(signal: AbortSignal): void {
+    void this.ambience.start().catch(() => undefined);
+    const resume = () => {
+      if (this.sound() && !document.hidden) void this.ambience.start().catch(() => undefined);
+    };
+    for (const type of ['pointerdown', 'keydown']) {
+      document.addEventListener(type, resume, { once: true, capture: true, signal });
+    }
   }
 
   protected onVisibility(): void {
@@ -377,7 +397,7 @@ export default class Day03Bloom {
     // Le vent du moment : moyen + rafales, projeté dans notre regard.
     const gust = this.gusts.at(this.time);
     const speed = this.gusts.speed(this.time, c.windSpeed, c.gusts);
-    const wind = screenWind(speed, c.windFrom);
+    const wind = screenWind(speed * RENDER_WIND, c.windFrom);
     const view = { x: camera.x, y: camera.y, w: camera.w, h: camera.h };
 
     const falling = c.precip === 'rain' || c.precip === 'drizzle' ? c.intensity : 0;
@@ -385,7 +405,7 @@ export default class Day03Bloom {
     this.rain.step(dt, { precip: c.precip, intensity: c.intensity, wind, view, time: this.time });
     this.stage?.draw(this.petals?.petals ?? [], this.rain, c.precip, wind);
 
-    this.sway(wind.x, gust, speed);
+    this.sway(wind.x, gust, speed * RENDER_WIND);
     this.clouds += (wind.x * CLOUD_DRIFT + 1.2) * dt * (fast ? 25 : 1);
     this.sky().drift(this.clouds);
     this.storm(c, t);
@@ -402,13 +422,7 @@ export default class Day03Bloom {
       this.look = computeLook({
         sun,
         moon: moonPhase(now),
-        lights: cityLights(
-          now,
-          sun.elevation,
-          weather?.sunrises ?? [],
-          weather?.sunsets ?? [],
-          this.utcOffset(),
-        ),
+        lights: cityLights(now, sun.elevation, weather?.sunrises ?? [], weather?.sunsets ?? []),
         conditions: c,
       });
       this.paint(this.look);
@@ -430,7 +444,7 @@ export default class Day03Bloom {
     }
     if (this.sound() && t - this.soundAt > 250) {
       this.soundAt = t;
-      this.ambience.set(levels(c, speed, gust, wind.x));
+      this.ambience.set(levels(c, speed, gust, wind.x / RENDER_WIND));
     }
   }
 

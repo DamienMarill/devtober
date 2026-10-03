@@ -1,5 +1,4 @@
 import { Rgb, add, desaturate, light, luminance, mix, parseHex, rgba, toHex } from './color';
-import { ogakiMinutes } from './clock';
 import { skyPoint } from './projection';
 import { MoonPhase, SunPosition } from './solar';
 import { Conditions } from './weather';
@@ -132,7 +131,7 @@ const SKY: SkyKey[] = [
 ];
 
 export interface Lights {
-  /** Lanternes de papier de la fête des cerisiers (du coucher du soleil à 22 h), 0–1. */
+  /** Lanternes de papier de la fête des cerisiers (du coucher au lever du soleil), 0–1. */
   lanterns: number;
 }
 
@@ -141,14 +140,13 @@ const RAMP = 5 * 60_000;
 
 /**
  * Les lanternes sont-elles allumées ? Elles s'allument au coucher du soleil donné par l'API (sans lui, on
- * se rabat sur la hauteur du soleil) et s'éteignent à 22 h, comme pendant la fête des cerisiers d'Ōgaki.
+ * se rabat sur la hauteur du soleil) et restent allumées toute la nuit, jusqu'au lever du soleil.
  */
 export function cityLights(
   ms: number,
   elevation: number,
   sunrises: readonly number[],
   sunsets: readonly number[],
-  utcOffsetSeconds?: number,
 ): Lights {
   let dark: number;
   const events = [
@@ -162,9 +160,7 @@ export function cityLights(
   } else {
     dark = clamp01((-elevation + 0.5) / 3);
   }
-  const minutes = ogakiMinutes(ms, utcOffsetSeconds);
-  const curfew = minutes >= 22 * 60 || minutes < 5 * 60 ? 0 : 1;
-  return { lanterns: dark * curfew };
+  return { lanterns: dark };
 }
 
 export interface LookInput {

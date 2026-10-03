@@ -48,10 +48,15 @@ export interface PetalEnv {
   time: number;
 }
 
-/** Vitesse de chute d'un pétale sec (m/s) : un pétale de cerisier tombe à ~1 m/s. */
-export const FALL_SPEED = 1;
+/**
+ * Vitesse de chute d'un pétale sec dans l'air calme (m/s). Un pétale est large et léger : il s'appuie sur
+ * l'air, plane et se balance plus qu'il ne tombe, d'où une chute lente.
+ */
+export const FALL_SPEED = 0.25;
 /** Temps de réponse au vent (s) : un pétale n'a presque pas d'inertie. */
 const DRAG = 1.6;
+/** Vent (m/s) à partir duquel le côté au vent émet autant par unité de longueur que le haut. */
+const SIDE_WIND = 1.5;
 const FADE_SECONDS = 1.2;
 /** Un pétale qui traîne trop (pris dans un tourbillon hors champ) finit par s'effacer. */
 const MAX_SECONDS = 40;
@@ -59,7 +64,7 @@ const MAX_SECONDS = 40;
 export class PetalField {
   readonly petals: Petal[] = [];
   /** Pétales émis par seconde à vent nul, et plafond de pétales vivants. */
-  rate = 120;
+  rate = 70;
   max = 1600;
   private debt = 0;
 
@@ -84,14 +89,16 @@ export class PetalField {
     const k = Math.min(1, dt * DRAG);
     for (const p of this.petals) {
       p.age += dt;
-      // Turbulence propre à chaque pétale (deux sinus), par-dessus le vent.
+      // Turbulence propre à chaque pétale (deux sinus), par-dessus le vent, plus le louvoiement du
+      // pétale qui plane : il glisse du côté où il penche (sin du culbutage) et rebondit sur l'air.
       const t = env.time + p.phase;
-      const tx = 0.55 * Math.sin(1.3 * t) + 0.3 * Math.sin(3.1 * t + 1.7);
+      const tx =
+        0.55 * Math.sin(1.3 * t) + 0.3 * Math.sin(3.1 * t + 1.7) + 0.35 * Math.sin(p.tumble);
       const tz = 0.4 * Math.sin(0.9 * t + 0.6);
-      const ty = 0.35 * Math.sin(2.3 * t);
+      const ty = 0.3 * Math.sin(2.3 * t) + 0.2 * Math.cos(2 * p.tumble);
       p.vx += (env.wind.x + tx - p.vx) * k;
       p.vz += (env.wind.z + tz - p.vz) * k;
-      p.vy += (-fall * (0.75 + 0.5 * Math.abs(Math.cos(p.tumble))) + ty - p.vy) * k;
+      p.vy += (-fall * (0.7 + 0.6 * Math.abs(Math.cos(p.tumble))) + ty - p.vy) * k;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.z += p.vz * dt;
@@ -139,8 +146,9 @@ export class PetalField {
     let x: number;
     let y: number;
     let z: number;
-    // Un quart naît dans les fleurs visibles ; les autres tombent d'au-dessus du cadre, sur toute sa
-    // largeur : ce sont eux qu'on voit passer devant le ciel, le pont et les montagnes.
+    // Un quart naît dans les fleurs visibles ; les autres arrivent par les bords du cadre : le haut, et,
+    // quand le vent souffle, le côté d'où il vient (sinon on ne verrait qu'un rideau tomber du haut).
+    // Ce sont eux qu'on voit passer devant le ciel, le pont et les montagnes.
     if (inView.length && r() < 0.25) {
       const s = inView[Math.floor(r() * inView.length)];
       z = Math.max(2, s.z + (r() - 0.5) * 3);
@@ -150,7 +158,20 @@ export class PetalField {
     } else {
       // Une part tombe tout près de nous : de grands pétales qui passent devant les yeux.
       z = r() < 0.25 ? 2.2 + r() * 4 : 5 + r() ** 1.5 * 25;
-      const p = unproject(view.x + r() * view.w, view.y - 20, z);
+      // Les pétales entrent par le haut et par le seul côté d'où vient le vent, au même débit par unité de
+      // longueur : la part de chaque bord est proportionnelle à sa taille (autant en haut qu'à côté sur
+      // un cadre carré). Le côté ne compte qu'à mesure que le vent se lève, sinon rien n'y entre.
+      const sideLength = view.h * Math.min(1, Math.abs(env.wind.x) / SIDE_WIND);
+      let sx: number;
+      let sy: number;
+      if (r() * (view.w + sideLength) < sideLength) {
+        sx = env.wind.x > 0 ? view.x - 40 : view.x + view.w + 40;
+        sy = view.y - 20 + r() * view.h;
+      } else {
+        sx = view.x + r() * view.w;
+        sy = view.y - 20;
+      }
+      const p = unproject(sx, sy, z);
       x = p.x;
       y = p.y;
     }
