@@ -4,14 +4,14 @@ Un tunnel de cerisiers en fleur au-dessus du canal Suimon, à Ōgaki : le ciel, 
 
 ## L'idée
 
-Ōgaki est la ville où se passe *Koe no Katachi*, et le pont Mitokoi celui du film. Je voulais une fenêtre ouverte sur ce canal au printemps : on lève les yeux, les fleurs cachent tout, le pont flotte dans une trouée et les montagnes de l'ouest apparaissent au fond. Ce qu'on voit, c'est ce que verrait quelqu'un sur place au même moment. Seule licence : les cerisiers sont toujours en fleur, même en octobre.
+Ōgaki est la ville où se passe *Koe no Katachi*, et le pont Mitokoi celui du film. Je voulais une fenêtre ouverte sur ce canal au printemps : on lève les yeux, les fleurs cachent tout, le pont flotte dans une trouée et les montagnes de l'ouest apparaissent au fond. Seule licence : les cerisiers sont toujours en fleur, même en octobre.
 
 ## Comment c'est codé
 
 La scène est un empilement de plans, du fond vers l'avant :
 - le ciel ([`art/sky.ts`](./art/sky.ts)) ;
 - les montagnes en SVG ([`lib/mountains.ts`](./lib/mountains.ts)) ;
-- le pont ([`lib/bridge.ts`](./lib/bridge.ts)), modélisé en mètres avec sa propre caméra : droit, il traverse tout le cadre derrière les fleurs et s'élargit au milieu en un carré, comme le balcon du film ;
+- le pont ([`lib/bridge.ts`](./lib/bridge.ts)), modélisé en mètres avec sa propre caméra : droit, il traverse tout le cadre derrière les fleurs, s'élargit au milieu en un carré comme le balcon du film, et porte un cordon de lanternes tendu entre des mâts de bambou ;
 - quatre calques de cerisiers sur canvas ;
 - deux canvases de pétales et de pluie, l'un derrière les branches proches, l'autre devant.
 
@@ -48,7 +48,7 @@ const rel = ((from + 180 - heading) * Math.PI) / 180;
 return { x: clean(Math.sin(rel) * speed), z: clean(Math.cos(rel) * speed) };
 ```
 
-Les pétales ([`lib/petals.ts`](./lib/petals.ts)) partent des bouquets, tombent à environ 1 m/s en culbutant et suivent le vent. Une seule boucle `requestAnimationFrame` fait tout bouger ; aucun signal ne change à chaque image.
+Les pétales ([`lib/petals.ts`](./lib/petals.ts)) naissent dans les fleurs ou au-dessus du cadre, tombent à environ 1 m/s en culbutant et suivent le vent. Une seule boucle `requestAnimationFrame` fait tout bouger ; aucun signal ne change à chaque image.
 
 Le bouton en haut à droite lance une ambiance synthétisée en WebAudio à partir de bruit filtré : rivière, vent, pluie, tonnerre ([`lib/ambience.ts`](./lib/ambience.ts)). La touche T lance une visite d'une journée en 30 secondes. La touche D (ou `?debug` dans l'adresse) ouvre un panneau pour imposer l'heure, la météo et le vent, par exemple `?debug&time=18:40&weather=rain&wind=8,270`.
 

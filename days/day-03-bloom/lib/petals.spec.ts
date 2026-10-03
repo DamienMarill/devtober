@@ -61,6 +61,7 @@ describe('PetalField', () => {
     const field = new PetalField([], seeded(5));
     run(field, 5, () => env());
     expect(field.petals.length).toBeGreaterThan(0);
-    for (const p of field.petals) expect(p.z).toBeGreaterThan(2);
+    // Les plus proches passent sous notre nez, jamais derrière nous.
+    for (const p of field.petals) expect(p.z).toBeGreaterThan(1);
   });
 });

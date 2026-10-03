@@ -269,7 +269,7 @@ export default class Day03Bloom {
       this.stage = new Stage(this.backCanvas().nativeElement, this.frontCanvas().nativeElement);
       this.petals = new PetalField([]);
       if (this.coarse) {
-        this.petals.max = 140;
+        this.petals.max = 600;
         this.rain.density = 0.6;
       }
       if (this.reduced) {

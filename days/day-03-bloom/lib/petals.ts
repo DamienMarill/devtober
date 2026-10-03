@@ -59,8 +59,8 @@ const MAX_SECONDS = 40;
 export class PetalField {
   readonly petals: Petal[] = [];
   /** Pétales émis par seconde à vent nul, et plafond de pétales vivants. */
-  rate = 14;
-  max = 320;
+  rate = 120;
+  max = 1600;
   private debt = 0;
 
   constructor(
@@ -73,7 +73,7 @@ export class PetalField {
     const speed = Math.hypot(env.wind.x, env.wind.z);
     // Plus de vent, plus de pétales arrachés ; une rafale en arrache d'un coup.
     const rate =
-      this.rate * (0.35 + Math.min(speed, 12) / 4) * (1 + 3 * env.gust) * (1 + env.rain * 0.5);
+      this.rate * (0.7 + Math.min(speed, 12) / 5) * (1 + 2 * env.gust) * (1 + env.rain * 0.5);
     this.debt += rate * dt;
     while (this.debt >= 1) {
       this.debt -= 1;
@@ -133,14 +133,15 @@ export class PetalField {
   private spawn(env: PetalEnv): void {
     const r = this.random;
     const { view } = env;
-    // La plupart naissent dans une grappe visible ; les autres tombent d'arbres hors cadre, au-dessus.
     const inView = this.sources.filter(
       (s) => s.x > view.x && s.x < view.x + view.w && s.y > view.y - 50 && s.y < view.y + view.h,
     );
     let x: number;
     let y: number;
     let z: number;
-    if (inView.length && r() < 0.6) {
+    // Un quart naît dans les fleurs visibles ; les autres tombent d'au-dessus du cadre, sur toute sa
+    // largeur : ce sont eux qu'on voit passer devant le ciel, le pont et les montagnes.
+    if (inView.length && r() < 0.25) {
       const s = inView[Math.floor(r() * inView.length)];
       z = Math.max(2, s.z + (r() - 0.5) * 3);
       const p = unproject(s.x + (r() - 0.5) * s.r * 1.6, s.y + (r() - 0.5) * s.r, z);
@@ -148,7 +149,7 @@ export class PetalField {
       y = p.y;
     } else {
       // Une part tombe tout près de nous : de grands pétales qui passent devant les yeux.
-      z = r() < 0.35 ? 2.2 + r() * 5 : 6 + r() ** 0.8 * 30;
+      z = r() < 0.25 ? 2.2 + r() * 4 : 5 + r() ** 1.5 * 25;
       const p = unproject(view.x + r() * view.w, view.y - 20, z);
       x = p.x;
       y = p.y;
@@ -164,7 +165,8 @@ export class PetalField {
       spin: (r() - 0.5) * 3,
       tumble: r() * Math.PI * 2,
       tumbleSpeed: 2 + r() * 5,
-      size: 0.032 + r() * 0.016,
+      // Un peu plus grands que nature (1,5 cm) : une pluie de pétales doit se voir, comme dans un anime.
+      size: 0.05 + r() * 0.03,
       tint: Math.floor(r() * 4),
       phase: r() * 100,
       age: 0,

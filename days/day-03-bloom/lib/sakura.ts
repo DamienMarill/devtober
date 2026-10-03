@@ -390,6 +390,26 @@ const WIDE: Limb[] = [
 ];
 const wide = (k: number): Limb[] => WIDE.map((l) => ({ ...l, length: l.length * k }));
 
+/**
+ * La rive droite n'est pas le miroir de la gauche : ses grands cerisiers sont plus vieux, l'un étire une
+ * longue branche presque à l'horizontale au-dessus de l'eau, l'autre lance ses charpentières vers le ciel
+ * et laisse retomber les plus basses.
+ */
+const RIGHT_REACH: Limb[] = [
+  { angle: 1.3, length: 10.5, droop: 0.55 },
+  { angle: 0.85, length: 7 },
+  { angle: 0.4, length: 8.5 },
+  { angle: 0.05, length: 6.5 },
+  { angle: -0.55, length: 4 },
+];
+const RIGHT_TALL: Limb[] = [
+  { angle: 1.5, length: 7.5, droop: 1.5 },
+  { angle: 0.95, length: 9 },
+  { angle: 0.5, length: 6 },
+  { angle: 0.15, length: 8.5 },
+  { angle: -0.3, length: 5.5 },
+];
+
 /** Une branche basse d'un arbre tout proche, hors cadre, qui entre par un bord avec de grandes fleurs. */
 function foreground(
   x: number,
@@ -430,13 +450,13 @@ export const TREES: TreeSpec[] = [
   canal('right', 52, 46, 'far', 1, tall(1.5)),
   canal('left', 48, 47, 'far', 1, tall(1.5)),
   canal('left', 47, 37, 'mid', 1, wide(0.85)),
-  canal('right', 45, 38, 'mid', 1, wide(0.85)),
+  canal('right', 43, 38, 'mid', 1, wide(0.8)),
   canal('left', 42, 31, 'mid', 1, wide(0.9)),
-  canal('right', 38, 32, 'mid', 1, wide(0.9)),
+  canal('right', 35, 32, 'mid', 1, wide(1.05)),
   canal('left', 33, 33, 'mid', 1, wide(0.95)),
-  canal('right', 30, 34, 'mid', 1, wide(0.95)),
+  canal('right', 31, 34, 'mid', 1, tall(0.9)),
   canal('left', 26, 35, 'mid', 1, wide(1)),
-  canal('right', 24, 36, 'mid', 1, wide(1)),
+  canal('right', 25, 36, 'mid', 1, wide(0.9), 1.3),
   canal('left', 20, 21, 'left', 1, tall(1.05), 0.8),
   canal('left', 14, 23, 'left', 1, tall(1.1), 0.8),
   foreground(-3.6, 4.6, 6, 1, 27, [
@@ -444,12 +464,13 @@ export const TREES: TreeSpec[] = [
     { angle: 1.1, length: 2.2, droop: 1.2 },
     { angle: 1.7, length: 2, droop: 1 },
   ]),
-  canal('right', 19, 24, 'right', 1, tall(1.05), 0.8),
-  canal('right', 13, 26, 'right', 1, tall(1.1), 0.8),
-  foreground(3.6, 4.6, 6, -1, 28, [
-    { angle: 1.35, length: 2.6, droop: 1.1 },
-    { angle: 1.1, length: 2.2, droop: 1.2 },
-    { angle: 1.7, length: 2, droop: 1 },
+  canal('right', 17, 24, 'right', 1, RIGHT_REACH, 0.9),
+  canal('right', 11.5, 26, 'right', 1, RIGHT_TALL, 0.7),
+  // À droite, la branche du premier plan tombe d'en haut au lieu d'entrer par le bas.
+  foreground(3.1, 6.4, 6.5, -1, 28, [
+    { angle: 1.75, length: 2.4, droop: 1.5 },
+    { angle: 2.1, length: 1.8, droop: 1.2 },
+    { angle: 1.45, length: 1.6, droop: 1.8 },
   ]),
 ];
 

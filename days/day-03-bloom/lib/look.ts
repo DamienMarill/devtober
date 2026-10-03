@@ -33,6 +33,7 @@ const MATERIALS: Record<string, [string, number, number?]> = {
   'deck-under': ['#4a4650', 0.4, 0.04],
   // Lanternes (le papier lui-même s'allume la nuit, voir EMISSIVE).
   'lantern-cord': ['#3a3133', 0.3],
+  'lantern-pole': ['#b29a68', 0.4, 0.1],
   'lantern-cap': ['#2e2829', 0.3, 0.05],
   // Pétales en vol (sprites des canvases de particules).
   'petal-hi': ['#fff4f7', 0.05, 0.3],

@@ -113,6 +113,136 @@ function underside(p: Painter, x0: number, x1: number, z0: number, z1: number): 
   ]);
 }
 
+/** Un trait 3D d'épaisseur `t` mètres le long d'une polyligne (bambou, corde). */
+function stroke(p: Painter, m: string, points: readonly V3[], t: number): void {
+  for (let i = 1; i < points.length; i++) {
+    const [x0, y0, z0] = points[i - 1];
+    const [x1, y1, z1] = points[i];
+    const a = bridgePoint(x0, y0, z0);
+    const b = bridgePoint(x1, y1, z1);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const nx = -(b[1] - a[1]) / len;
+    const ny = (b[0] - a[0]) / len;
+    const wa = (t * BRIDGE_VIEW.focal) / z0 / 2;
+    const wb = (t * BRIDGE_VIEW.focal) / z1 / 2;
+    p.poly(m, [
+      [a[0] + nx * wa, a[1] + ny * wa],
+      [b[0] + nx * wb, b[1] + ny * wb],
+      [b[0] - nx * wb, b[1] - ny * wb],
+      [a[0] - nx * wa, a[1] - ny * wa],
+    ]);
+  }
+}
+
+/** Hauteur d'une lanterne (m), longueur de son attache, flèche de la corde entre deux mâts. */
+const LANTERN_M = 0.45;
+const CORD = 0.12;
+const SAG = 0.3;
+/** Les mâts de bambou dépassent du garde-corps de tant de mètres. */
+const POLE = 1.45;
+
+/** Une lanterne accrochée au pont : centre et hauteur (composition), et le point de la corde où elle pend. */
+export interface BridgeLantern {
+  x: number;
+  y: number;
+  h: number;
+  /** Ordonnée du point d'attache sur la corde. */
+  top: number;
+}
+
+/**
+ * Le cordon de lanternes de la fête des cerisiers : des mâts de bambou ligaturés aux poteaux du garde-corps
+ * avant (un sur deux) et aux coins du carré, une corde tendue de mât en mât, et une lanterne au creux de
+ * chaque travée (deux devant le carré).
+ */
+function lanternLine(): { poles: V3[]; spans: { from: V3; to: V3; lanterns: number[] }[] } {
+  const { z, rail, balcony } = BRIDGE;
+  const a = balcony.x - balcony.half;
+  const b = balcony.x + balcony.half;
+  const front = z - balcony.depth;
+  const y = rail + 0.1;
+  const poles: V3[] = [
+    [a - POST_EVERY * 6, y, z],
+    [a - POST_EVERY * 4, y, z],
+    [a - POST_EVERY * 2, y, z],
+    [a, y, front],
+    [b, y, front],
+    [b + POST_EVERY * 2, y, z],
+    [b + POST_EVERY * 4, y, z],
+    [b + POST_EVERY * 6, y, z],
+  ];
+  const spans = poles.slice(1).map((to, i) => ({
+    from: poles[i],
+    to,
+    lanterns: i === 3 ? [1 / 3, 2 / 3] : [0.5],
+  }));
+  return { poles, spans };
+}
+
+/** Point de la corde d'une travée, à `t` (0–1) : une parabole sous la ligne des sommets des mâts. */
+function ropeAt(from: V3, to: V3, t: number): V3 {
+  const top = POLE - 0.1;
+  return [
+    from[0] + (to[0] - from[0]) * t,
+    from[1] + top - SAG * 4 * t * (1 - t),
+    from[2] + (to[2] - from[2]) * t,
+  ];
+}
+
+/** Les lanternes du pont, de gauche à droite. */
+export function bridgeLanterns(): BridgeLantern[] {
+  const out: BridgeLantern[] = [];
+  for (const span of lanternLine().spans) {
+    for (const t of span.lanterns) {
+      const [x, y, z] = ropeAt(span.from, span.to, t);
+      const [, top] = bridgePoint(x, y, z);
+      const [cx, cy] = bridgePoint(x, y - CORD - LANTERN_M / 2, z);
+      out.push({ x: cx, y: cy, h: (LANTERN_M * BRIDGE_VIEW.focal) / z, top });
+    }
+  }
+  return out;
+}
+
+/** Les mâts et les cordes (les lanternes elles-mêmes sont dessinées par `scenery.ts`). */
+function lanternRigging(p: Painter): void {
+  const { poles, spans } = lanternLine();
+  for (const [x, y, z] of poles) {
+    stroke(
+      p,
+      'lantern-pole',
+      [
+        [x, y - 0.6, z],
+        [x, y + POLE, z],
+      ],
+      0.06,
+    );
+    // Ligatures sur le poteau.
+    stroke(
+      p,
+      'lantern-cord',
+      [
+        [x - 0.05, y - 0.15, z],
+        [x + 0.05, y - 0.15, z],
+      ],
+      0.04,
+    );
+    stroke(
+      p,
+      'lantern-cord',
+      [
+        [x - 0.05, y - 0.35, z],
+        [x + 0.05, y - 0.35, z],
+      ],
+      0.04,
+    );
+  }
+  for (const { from, to } of spans) {
+    const rope: V3[] = [];
+    for (let i = 0; i <= 16; i++) rope.push(ropeAt(from, to, i / 16));
+    stroke(p, 'lantern-cord', rope, 0.02);
+  }
+}
+
 /** Dessine le pont, du fond vers l'avant (peintre). */
 export function buildBridge(p: Painter): void {
   const random = seeded(7);
@@ -155,4 +285,6 @@ export function buildBridge(p: Painter): void {
   underside(p, a, b, front, z);
   beam(p, a, b, front, random);
   railing(p, 'rail', [a, deck, front], [b, deck, front], true);
+
+  lanternRigging(p);
 }

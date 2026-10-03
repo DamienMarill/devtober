@@ -96,15 +96,6 @@ export const RIGHT_MASS: Point[] = [
   [860 * K - 10, 1250],
 ];
 
-/** Lanternes de papier suspendues aux branches, au bord de la trouée (composition). */
-export const LANTERN_SPOTS: Point[] = [
-  [448, 372],
-  [378, 470],
-  [836, 398],
-  [1000, 472],
-  [1072, 640],
-];
-
 /** Repères du ciel : ligne d'horizon apparente (pied des montagnes) et échelle. */
 export const SKY = { horizon: 340, focal: 900, x: 760 } as const;
 
