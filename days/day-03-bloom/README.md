@@ -11,7 +11,7 @@ Un tunnel de cerisiers en fleur au-dessus du canal Suimon, à Ōgaki : le ciel, 
 La scène est un empilement de plans, du fond vers l'avant :
 - le ciel ([`art/sky.ts`](./art/sky.ts)) ;
 - les montagnes en SVG ([`lib/mountains.ts`](./lib/mountains.ts)) ;
-- le pont et ses lanternes ([`lib/scenery.ts`](./lib/scenery.ts)), posés en perspective par une homographie ;
+- le pont ([`lib/bridge.ts`](./lib/bridge.ts)), modélisé en mètres avec sa propre caméra : droit, il traverse tout le cadre derrière les fleurs et s'élargit au milieu en un carré, comme le balcon du film ;
 - quatre calques de cerisiers sur canvas ;
 - deux canvases de pétales et de pluie, l'un derrière les branches proches, l'autre devant.
 
@@ -31,7 +31,7 @@ if (shape.at(q.x, q.y) < (depth >= 3 ? 0.06 : 0.04)) {
 }
 ```
 
-Chaque fleur est un sprite dessiné une seule fois : cinq pétales échancrés, cœur, étamines ([`lib/sakura-paint.ts`](./lib/sakura-paint.ts)). Il est ensuite tamponné des dizaines de milliers de fois, tourné et aplati. La peinture est découpée en tranches de quelques millisecondes par image, pour que l'animation ne gèle pas pendant que la canopée se remplit.
+Chaque fleur est un sprite dessiné une seule fois : cinq pétales échancrés, cœur, étamines ([`lib/sakura-paint.ts`](./lib/sakura-paint.ts)). Il est ensuite tamponné des dizaines de milliers de fois, tourné et aplati, par tranches de quelques millisecondes par image pour ne pas geler l'animation.
 
 La météo vient d'[Open-Meteo](https://open-meteo.com/), gratuit et sans clé ([`lib/weather.ts`](./lib/weather.ts)), relue toutes les 10 minutes avec `resource()`. Elle fournit :
 - le code WMO, qui devient pluie, bruine, neige, brouillard ou orage avec éclairs ;
@@ -39,7 +39,7 @@ La météo vient d'[Open-Meteo](https://open-meteo.com/), gratuit et sans clé (
 - le vent et les rafales ;
 - les heures de lever et de coucher.
 
-La lumière, elle, suit la hauteur du soleil que je calcule sur place avec les formules de la NOAA ([`lib/solar.ts`](./lib/solar.ts)). [`lib/look.ts`](./lib/look.ts) en tire toute la palette (ciel, montagnes, pont) sous forme de variables CSS, plus une teinte appliquée d'un bloc aux calques de cerisiers. Le coucher donné par l'API allume les lanternes, qui s'éteignent à 22 h.
+La lumière, elle, suit la hauteur du soleil que je calcule sur place avec les formules de la NOAA ([`lib/solar.ts`](./lib/solar.ts)). [`lib/look.ts`](./lib/look.ts) en tire toute la palette (ciel, montagnes, pont) sous forme de variables CSS, plus une teinte pour les calques de cerisiers. Le coucher donné par l'API allume les lanternes, qui s'éteignent à 22 h.
 
 Le vent météo dit d'où il vient. Comme on regarde plein ouest, je le projette dans le repère de l'écran ([`lib/wind.ts`](./lib/wind.ts)) :
 
@@ -48,7 +48,7 @@ const rel = ((from + 180 - heading) * Math.PI) / 180;
 return { x: clean(Math.sin(rel) * speed), z: clean(Math.cos(rel) * speed) };
 ```
 
-Les pétales ([`lib/petals.ts`](./lib/petals.ts)) partent des bouquets, tombent à environ 1 m/s en culbutant et prennent la vitesse du vent, plus une turbulence propre à chacun. Une seule boucle `requestAnimationFrame` fait tout bouger ; aucun signal ne change à chaque image.
+Les pétales ([`lib/petals.ts`](./lib/petals.ts)) partent des bouquets, tombent à environ 1 m/s en culbutant et suivent le vent. Une seule boucle `requestAnimationFrame` fait tout bouger ; aucun signal ne change à chaque image.
 
 Le bouton en haut à droite lance une ambiance synthétisée en WebAudio à partir de bruit filtré : rivière, vent, pluie, tonnerre ([`lib/ambience.ts`](./lib/ambience.ts)). La touche T lance une visite d'une journée en 30 secondes. La touche D (ou `?debug` dans l'adresse) ouvre un panneau pour imposer l'heure, la météo et le vent, par exemple `?debug&time=18:40&weather=rain&wind=8,270`.
 

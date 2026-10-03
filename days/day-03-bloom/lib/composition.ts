@@ -3,8 +3,8 @@ import type { Point } from './projection';
 /**
  * La composition, d'après le croquis de Damien : on lève les yeux. Les cerisiers des deux rives se
  * referment en tunnel (jusqu'en bas du cadre, où ils se rejoignent), leurs cimes se découpent sur le ciel,
- * les montagnes paraissent dans le creux entre les couronnes, et le pont flotte au milieu, dans une trouée
- * de fleurs. Coordonnées de composition (1600 × 1000), étendues jusqu'au débord.
+ * les montagnes paraissent dans le creux entre les couronnes, et le pont (voir `bridge.ts`) flotte au
+ * milieu, dans une trouée de fleurs. Coordonnées de composition (1600 × 1000), étendues jusqu'au débord.
  */
 
 /** Croquis (1766 × 1104) -> composition (1600 × 1000). */
@@ -95,20 +95,6 @@ export const RIGHT_MASS: Point[] = [
   [1860, 1250],
   [860 * K - 10, 1250],
 ];
-
-/**
- * Le pont, vu de trois quarts et un peu par en dessous : sa face avant (haut de la main courante à gauche
- * et à droite, bas de la poutre à droite et à gauche). Ses deux bouts se perdent dans les fleurs.
- */
-export const BRIDGE_FACE: [Point, Point, Point, Point] = [
-  [372, 500],
-  [1048, 456],
-  [1058, 648],
-  [382, 682],
-];
-
-/** Point de fuite (le canal file vers le bas du tunnel) : l'arrière du pont s'y resserre. */
-export const TUNNEL_VANISH: Point = [790, 1080];
 
 /** Lanternes de papier suspendues aux branches, au bord de la trouée (composition). */
 export const LANTERN_SPOTS: Point[] = [
@@ -201,31 +187,4 @@ function blur(src: Float32Array, cols: number, rows: number, radius: number): Fl
     }
   }
   return out;
-}
-
-/**
- * Homographie : envoie le carré unité (u, v ∈ [0, 1], v = 0 en haut) sur un quadrilatère quelconque. Le
- * pont, dessiné « à plat » en élévation, prend ainsi sa perspective de trois quarts.
- */
-export function homography(
-  quad: readonly [Point, Point, Point, Point],
-): (u: number, v: number) => Point {
-  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = quad;
-  const dx1 = x1 - x2;
-  const dx2 = x3 - x2;
-  const dy1 = y1 - y2;
-  const dy2 = y3 - y2;
-  const sx = x0 - x1 + x2 - x3;
-  const sy = y0 - y1 + y2 - y3;
-  const det = dx1 * dy2 - dx2 * dy1;
-  const g = (sx * dy2 - dx2 * sy) / det;
-  const h = (dx1 * sy - sx * dy1) / det;
-  const a = x1 - x0 + g * x1;
-  const b = x3 - x0 + h * x3;
-  const d = y1 - y0 + g * y1;
-  const e = y3 - y0 + h * y3;
-  return (u, v) => {
-    const w = g * u + h * v + 1;
-    return [(a * u + b * v + x0) / w, (d * u + e * v + y0) / w];
-  };
 }

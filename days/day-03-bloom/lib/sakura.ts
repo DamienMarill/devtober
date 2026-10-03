@@ -336,7 +336,12 @@ export function growTree(spec: TreeSpec): Tree {
   return { spec, wood, umbels, base: { x: bx, y: by } };
 }
 
-/** Un arbre de bord de canal, penché vers l'eau. */
+/**
+ * Un arbre de bord de canal, penché vers l'eau. Les deux rives sont plantées symétriquement par rapport
+ * à l'axe du regard : de chaque côté, seuls les bouts des branches entrent dans le cadre.
+ */
+const BANK_X = -(SITE.river.left - 1.1);
+
 function canal(
   side: 'left' | 'right',
   z: number,
@@ -348,7 +353,7 @@ function canal(
 ): TreeSpec {
   const left = side === 'left';
   return {
-    x: left ? SITE.river.left - 1.1 : SITE.path.right + 1,
+    x: left ? -BANK_X : BANK_X,
     z,
     toward: left ? 1 : -1,
     trunk: { height: 2.4 + (seed % 3) * 0.3, radius: 0.34, lean: 0.25 },
@@ -441,10 +446,10 @@ export const TREES: TreeSpec[] = [
   ]),
   canal('right', 19, 24, 'right', 1, tall(1.05), 0.8),
   canal('right', 13, 26, 'right', 1, tall(1.1), 0.8),
-  foreground(3.2, 5.3, 6.5, -1, 28, [
-    { angle: 1.45, length: 2.7, droop: 1.1 },
-    { angle: 1.15, length: 2.3, droop: 1.2 },
-    { angle: 1.8, length: 2, droop: 1 },
+  foreground(3.6, 4.6, 6, -1, 28, [
+    { angle: 1.35, length: 2.6, droop: 1.1 },
+    { angle: 1.1, length: 2.2, droop: 1.2 },
+    { angle: 1.7, length: 2, droop: 1 },
   ]),
 ];
 

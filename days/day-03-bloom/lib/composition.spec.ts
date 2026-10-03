@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  BRIDGE_FACE,
-  LEFT_MASS,
-  Mask,
-  RIGHT_MASS,
-  homography,
-  inside,
-  maskGradient,
-} from './composition';
+import { LEFT_MASS, Mask, RIGHT_MASS, inside, maskGradient } from './composition';
 
 describe('composition', () => {
   it('laisse le pont et le creux du ciel hors des masses de fleurs', () => {
@@ -40,20 +32,5 @@ describe('composition', () => {
     const toward = maskGradient(mask, 530, 600);
     expect(toward).toBeDefined();
     expect(Math.sin(toward!)).toBeLessThan(0);
-  });
-
-  it('envoie le carré unité sur la face du pont', () => {
-    const face = homography(BRIDGE_FACE);
-    BRIDGE_FACE.forEach((corner, i) => {
-      const [u, v] = [
-        [0, 0],
-        [1, 0],
-        [1, 1],
-        [0, 1],
-      ][i];
-      const [x, y] = face(u, v);
-      expect(x).toBeCloseTo(corner[0], 6);
-      expect(y).toBeCloseTo(corner[1], 6);
-    });
   });
 });

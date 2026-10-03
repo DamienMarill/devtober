@@ -58,6 +58,6 @@ export const SITE = {
   path: { y: 0.9, left: 2.5, right: 5.2 },
   /** Haut des berges (rue, pieds des cerisiers). */
   bank: 2.3,
-  /** Le pont Mitokoi, à 42 m : au-delà, un pétale est trop petit pour compter. */
-  bridge: { z: 42 },
+  /** Au-delà de cette profondeur, un pétale est trop petit pour compter. */
+  petalFar: 42,
 } as const;

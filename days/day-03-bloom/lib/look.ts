@@ -23,6 +23,7 @@ const MATERIALS: Record<string, [string, number, number?]> = {
   'mountain-near-light': ['#86a08d', 0.85],
   // Le pont
   'rail-back': ['#6a3a2e', 0.55, 0.05],
+  'rail-back-hi': ['#a8705c', 0.55, 0.06],
   rail: ['#7f4534', 0.4, 0.1],
   'rail-hi': ['#c98a70', 0.4, 0.12],
   deck: ['#d6d1c6', 0.4, 0.08],

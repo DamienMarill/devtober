@@ -124,7 +124,7 @@ export class PetalField {
 
   /** Sorti du champ (ou passé derrière le pont, ou derrière nous) : il s'efface. */
   private outside(p: Petal, view: PetalEnv['view']): boolean {
-    if (p.z < 1.2 || p.z > SITE.bridge.z + 1) return true;
+    if (p.z < 1.2 || p.z > SITE.petalFar + 1) return true;
     const [sx, sy] = project(p.x, p.y, p.z);
     const margin = 80;
     return sx < view.x - margin || sx > view.x + view.w + margin || sy > view.y + view.h + margin;
