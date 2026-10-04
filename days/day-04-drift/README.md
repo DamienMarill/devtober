@@ -14,7 +14,7 @@ Une cérémonie de remise de prix : les Dérapawards, qui couronnent chaque mois
 
 **Éditer le contenu.** Chaque mois a un champ `punchline` (vide par défaut) pour un commentaire éditorial écrit à la main, affiché avec le lauréat ; chaque dérapage peut aussi en avoir un. Les trois premiers de chaque mois ont un champ `image` (`url` et `source`) : l'image de partage de l'article cité, affichée en bandeau avec un lien vers sa source.
 
-**Le trophée** est en three.js, chargé seulement avec ce jour ([`trophy-stage.ts`](./trophy-stage.ts)). La banane et ses pelures sont des solides « balayés » : une ellipse qui glisse le long d'un chemin en changeant de taille ([`trophy/sweep.ts`](./trophy/sweep.ts)).
+**Le trophée** est en three.js, chargé seulement avec ce jour ([`lib/trophy-stage.ts`](lib/trophy-stage.ts)). La banane et ses pelures sont des solides « balayés » : une ellipse qui glisse le long d'un chemin en changeant de taille ([`trophy/sweep.ts`](./trophy/sweep.ts)).
 
 ```ts
 target.set(
@@ -34,7 +34,7 @@ this.trophy.position.x = -7 * decay * Math.cos(3.4 * t);
 this.trophy.rotation.y = 2.6 * decay * Math.cos(3.4 * t + 0.5);
 ```
 
-**L'interface** : une enveloppe scellée ([`envelope.ts`](./envelope.ts)), un cadran de vitesse SVG pour le kilométrage ([`odometer.ts`](./odometer.ts)), des cartes dépliables avec citation, faits, sources et liens de « carambolage » vers les dérapages liés ([`nominee.ts`](./nominee.ts)). Les mois déjà ouverts sont gardés dans `sessionStorage`.
+**L'interface** : une enveloppe scellée ([`lib/envelope.ts`](lib/envelope.ts)), un cadran de vitesse SVG pour le kilométrage ([`lib/odometer.ts`](lib/odometer.ts)), des cartes dépliables avec citation, faits, sources et liens de « carambolage » vers les dérapages liés ([`lib/nominee.ts`](lib/nominee.ts)). Les mois déjà ouverts sont gardés dans `sessionStorage`.
 
 ## Lien avec le mot
 

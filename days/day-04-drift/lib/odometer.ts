@@ -1,5 +1,5 @@
 import { afterNextRender, Component, computed, input, signal } from '@angular/core';
-import { CRITERES, CRITERE_LABELS, Critere, Kilometrage } from './lib/awards';
+import { CRITERES, CRITERE_LABELS, Critere, Kilometrage } from './awards';
 
 const CX = 100;
 const CY = 100;

@@ -11,8 +11,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { BananaEmblem } from './art';
-import type { Plaque } from './trophy/plinth';
-import type { TrophyScene } from './trophy/scene';
+import type { Plaque } from '../trophy/plinth';
+import type { TrophyScene } from '../trophy/scene';
 
 /**
  * Le canvas du trophée. Un seul contexte WebGL pour toute la page : quand on change de mois, on regrave
@@ -53,7 +53,7 @@ export class TrophyStage {
     afterNextRender(async () => {
       try {
         // three.js ne se charge qu'ici, avec le jour 4.
-        const { TrophyScene } = await import('./trophy/scene');
+        const { TrophyScene } = await import('../trophy/scene');
         const canvas = this.canvas().nativeElement;
         if (destroyRef.destroyed) return;
         const scene = new TrophyScene(canvas);

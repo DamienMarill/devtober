@@ -13,7 +13,7 @@ import {
   findCandidat,
   monthName,
   shortName,
-} from './lib/awards';
+} from './awards';
 
 /**
  * Un nominé : en ligne repliée (rang, titre, qui, note), puis dépliée (citation, faits, suites,

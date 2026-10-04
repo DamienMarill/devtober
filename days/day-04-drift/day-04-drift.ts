@@ -11,8 +11,8 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { BananaEmblem, DecoRule, Laurel, Skid } from './art';
-import { Envelope } from './envelope';
+import { BananaEmblem, DecoRule, Laurel, Skid } from './lib/art';
+import { Envelope } from './lib/envelope';
 import {
   Awards,
   CRITERE_LABELS,
@@ -31,9 +31,9 @@ import {
   roman,
   shortName,
 } from './lib/awards';
-import { Nominee } from './nominee';
+import { Nominee } from './lib/nominee';
 import type { Plaque } from './trophy/plinth';
-import { TrophyStage } from './trophy-stage';
+import { TrophyStage } from './lib/trophy-stage';
 
 const FONTS =
   'https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&display=swap';
