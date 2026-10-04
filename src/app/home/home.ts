@@ -1,5 +1,5 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmBadgeImports, type BadgeVariants } from '@spartan-ng/helm/badge';
 import { HlmCardImports } from '@spartan-ng/helm/card';
@@ -27,6 +27,13 @@ export default class Home {
     const status = dayStatus(day);
     return { ...day, status, ...STATUS[status] };
   });
+
+  /** Jours dont la miniature n'a pas pu être chargée (PNG pas encore généré). */
+  protected readonly failed = signal<ReadonlySet<string>>(new Set());
+
+  protected markFailed(slug: string) {
+    this.failed.update((set) => new Set(set).add(slug));
+  }
 
   protected readonly doneCount = this.days.filter((d) => d.status === 'done').length;
 }

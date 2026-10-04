@@ -23,11 +23,13 @@ import { DAYS, padDay } from '../days';
         [attr.data-slug]="d.slug"
         [attr.data-seconds]="d.entry!.capture.seconds"
         [attr.data-settle]="d.entry!.capture.settle ?? 1500"
+        [attr.data-thumbnail-at]="d.entry!.capture.thumbnailAt"
+        [attr.data-thumbnail-focus]="d.entry!.capture.thumbnailFocus"
         [attr.data-click-x]="d.entry!.capture.click?.x"
         [attr.data-click-y]="d.entry!.capture.click?.y"
         [attr.data-key]="d.entry!.capture.key"
       >
-        <div class="relative min-h-0 flex-1 overflow-hidden">
+        <div id="capture-stage" class="relative min-h-0 flex-1 overflow-hidden">
           @if (component.value(); as c) {
             <ng-container *ngComponentOutlet="c" />
           }

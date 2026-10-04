@@ -3,10 +3,12 @@
 //   preview.gif        l'aperçu du README (~13 Mo)
 //   preview.mp4        pour les posts (X, LinkedIn, Instagram…) : pleine qualité, ~4 Mo
 //   preview-embed.gif  l'image d'aperçu des liens partagés (og:image) : sous 5 Mo, sinon les réseaux l'ignorent
+//   preview.png        la miniature des cartes de l'accueil (générée par scripts/thumbnail.mjs, appelé à la fin)
 //
 // Usage : npm run gif -- 1                (tout, durée définie par le jour)
 //         npm run gif -- 1 --preview      (3 s, GIF seulement, pour vérifier le clic (ou la touche) et le cadrage : preview-test.gif)
 //         npm run gif -- 1 --embed-only   (refait seulement preview-embed.gif, depuis preview.mp4 : sans refilmer)
+//         (--preview et --embed-only ne touchent pas à la miniature : `npm run thumbnail -- 1` la refait seule)
 //
 // Options : --url <adresse>   filmer un serveur déjà lancé (ex. http://localhost:4200) au lieu de construire l'app
 //           --skip-build      réutiliser le dernier `ng build` (dist/)
@@ -19,21 +21,20 @@
 //           --no-denoise      désactive le débruitage avant la palette (il allège le GIF sans changer son aspect)
 //           --no-mp4          ne génère pas le MP4
 //           --no-embed        ne génère pas l'image d'embed
+//           --no-thumbnail    ne génère pas la miniature PNG
+//           --thumbnail-at <s>  instant de la miniature (secondes après le clic ou la touche), voir scripts/thumbnail.mjs
+//           --thumbnail-focus <0-1>  cadrage vertical de la miniature 16/9 (0.5 = centre)
 //           --embed-seconds <s>  durée visée de l'image d'embed (12) ; elle raccourcit seule si elle dépasse le budget
 //           --embed-budget <Mo>  poids maximal de l'image d'embed (4.5 : X, LinkedIn et Slack refusent au-delà de 5)
 //           --keep-video      garder la vidéo brute (.webm) à côté du GIF
 //
 // Réglages par jour : `capture` dans days/registry.ts (clic et/ou touche, durée, attente).
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright-core';
+import { join, sep } from 'node:path';
+import { launchChrome, loadCapture, openApp, resolveDay, ROOT, trigger } from './lib/capture-env.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = join(ROOT, 'dist', 'devtober', 'browser');
 const PREVIEW_SECONDS = 3;
 const MB = 1024 * 1024;
 
@@ -44,11 +45,10 @@ const option = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
-const dayNumber = Number(args.find((a) => /^\d+$/.test(a)));
-if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > 31) {
-  console.error('Usage : npm run gif -- <jour 1-31> [--preview] [--embed-only] [--url <adresse>] [--skip-build] [--light] [--size 720] [--width 400] [--fps 12] [--colors 256] [--no-mp4] [--no-embed]');
-  process.exit(1);
-}
+const { dayNumber, slug, dayDir } = resolveDay(
+  args,
+  'Usage : npm run gif -- <jour 1-31> [--preview] [--embed-only] [--url <adresse>] [--skip-build] [--light] [--size 720] [--width 400] [--fps 12] [--colors 256] [--no-mp4] [--no-embed] [--no-thumbnail]',
+);
 const preview = flag('preview');
 const embedOnly = flag('embed-only');
 const size = Number(option('size', 720));
@@ -64,19 +64,13 @@ if (!['none', 'bayer', 'sierra2_4a'].includes(dither)) {
   process.exit(1);
 }
 
-const nn = String(dayNumber).padStart(2, '0');
-const slug = readdirSync(join(ROOT, 'days')).find((name) => name.startsWith(`day-${nn}-`));
-if (!slug) {
-  console.error(`Aucun dossier days/day-${nn}-… : crée-le avec « npm run new-day -- ${dayNumber} ».`);
-  process.exit(1);
-}
-const dayDir = join(ROOT, 'days', slug);
 const output = join(dayDir, preview ? 'preview-test.gif' : 'preview.gif');
 const outputMp4 = join(dayDir, 'preview.mp4');
 const outputEmbed = join(dayDir, 'preview-embed.gif');
 const wantMp4 = !preview && !embedOnly && !flag('no-mp4');
 const wantGif = !embedOnly;
 const wantEmbed = !preview && !flag('no-embed');
+const wantThumbnail = !preview && !embedOnly && !flag('no-thumbnail');
 const rel = (file) => file.replace(ROOT + sep, '');
 const mb = (file) => (statSync(file).size / MB).toFixed(1);
 
@@ -85,66 +79,15 @@ if (spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status !== 0) {
   process.exit(1);
 }
 
-// ---------- serveur ----------
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.png': 'image/png',
-  '.woff2': 'font/woff2',
-  '.txt': 'text/plain; charset=utf-8',
-};
-
-/** Sert dist/ avec le repli SPA (toute adresse sans fichier renvoie index.html, comme sur GitHub Pages). */
-function serveDist() {
-  return new Promise((done) => {
-    const server = createServer((req, res) => {
-      const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-      let file = normalize(join(DIST, pathname));
-      if (!file.startsWith(DIST + sep) && file !== DIST) file = join(DIST, 'index.html');
-      if (!existsSync(file) || statSync(file).isDirectory()) file = join(DIST, 'index.html');
-      res.setHeader('Content-Type', MIME[extname(file)] ?? 'application/octet-stream');
-      createReadStream(file).pipe(res);
-    });
-    server.listen(0, '127.0.0.1', () => done({ server, url: `http://127.0.0.1:${server.address().port}` }));
-  });
-}
-
 // ---------- enregistrement ----------
 /** Filme `/capture/<jour>` et renvoie la vidéo brute, avec l'instant du clic ou de la touche (`from`) et la durée utile. */
 async function record() {
-  let server;
-  let baseUrl = option('url', null);
-  if (!baseUrl) {
-    if (!flag('skip-build') || !existsSync(join(DIST, 'index.html'))) {
-      console.log("→ Construction de l'app (ng build)…");
-      // `ng` lancé par Node directement : pas de shell, donc pas d'arguments à échapper.
-      const ng = join(ROOT, 'node_modules', '@angular', 'cli', 'bin', 'ng.js');
-      const build = spawnSync(process.execPath, [ng, 'build'], { cwd: ROOT, stdio: 'inherit' });
-      if (build.status !== 0) process.exit(build.status ?? 1);
-    }
-    ({ server, url: baseUrl } = await serveDist());
-  }
-  baseUrl = baseUrl.replace(/\/$/, '');
+  const { server, baseUrl } = await openApp({ url: option('url', null), skipBuild: flag('skip-build') });
 
   const work = join(tmpdir(), `devtober-gif-${Date.now()}`);
   mkdirSync(work, { recursive: true });
 
-  let browser;
-  try {
-    browser = await chromium.launch({
-      channel: 'chrome',
-      // Le clic fournit le geste exigé par l'autoplay ; on coupe le son pour ne pas jouer le morceau dans la pièce.
-      args: ['--autoplay-policy=no-user-gesture-required', '--mute-audio'],
-    });
-  } catch (error) {
-    console.error(`Impossible de lancer Google Chrome (${error.message.split('\n')[0]}). Installe Chrome, ou adapte « channel » dans scripts/gif.mjs.`);
-    server?.close();
-    process.exit(1);
-  }
+  const browser = await launchChrome(server);
 
   const context = await browser.newContext({
     viewport: { width: size, height: size },
@@ -152,30 +95,10 @@ async function record() {
     recordVideo: { dir: work, size: { width: size, height: size } },
   });
 
-  console.log(`→ Chargement de ${baseUrl}/capture/${slug}`);
   const startedAt = Date.now(); // la vidéo démarre à la création de la page
   const page = await context.newPage();
-  await page.goto(`${baseUrl}/capture/${slug}`);
-  await page.waitForSelector('#capture[data-ready="true"]', { timeout: 30_000 });
-  const cfg = await page.$eval('#capture', (el) => ({
-    seconds: Number(el.dataset.seconds),
-    settle: Number(el.dataset.settle),
-    click: el.dataset.clickX === undefined ? null : { x: Number(el.dataset.clickX), y: Number(el.dataset.clickY) },
-    key: el.dataset.key ?? null,
-  }));
-  await page.waitForTimeout(cfg.settle);
-
-  if (cfg.click) {
-    console.log(`→ Clic en (${cfg.click.x}, ${cfg.click.y})`);
-    await page.mouse.click(cfg.click.x, cfg.click.y);
-  }
-  if (cfg.key) {
-    console.log(`→ Touche « ${cfg.key} »`);
-    await page.keyboard.press(cfg.key);
-  }
-  if (!cfg.click && !cfg.key) {
-    console.log('→ Ni clic ni touche définis : on filme dès que la page est chargée');
-  }
+  const cfg = await loadCapture(page, baseUrl, slug);
+  await trigger(page, cfg);
   const seconds = preview ? PREVIEW_SECONDS : cfg.seconds;
   // Un peu avant le clic ou la touche : la vidéo et l'horloge du script ne sont pas parfaitement synchrones.
   const from = Math.max(0, (Date.now() - startedAt) / 1000 - 0.1);
@@ -316,6 +239,17 @@ if (!embedOnly) {
     console.log(`   vidéo brute : ${kept}`);
   }
   rmSync(source.work, { recursive: true, force: true });
+}
+
+if (wantThumbnail) {
+  // Le build de l'étape précédente est réutilisé (--skip-build) ; --url et --size sont transmis tels quels.
+  console.log('→ Miniature PNG…');
+  const forwarded = ['--skip-build', '--size', String(size)];
+  if (option('url', null)) forwarded.push('--url', option('url'));
+  if (option('thumbnail-at', null)) forwarded.push('--at', option('thumbnail-at'));
+  if (option('thumbnail-focus', null)) forwarded.push('--focus', option('thumbnail-focus'));
+  const thumb = spawnSync(process.execPath, [join(ROOT, 'scripts', 'thumbnail.mjs'), String(dayNumber), ...forwarded], { stdio: 'inherit' });
+  if (thumb.status !== 0) console.error('La miniature a échoué (les GIF et le MP4 sont bons) : relance « npm run thumbnail -- ' + dayNumber + ' ».');
 }
 
 if (wantGif) {

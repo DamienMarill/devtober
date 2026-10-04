@@ -20,6 +20,7 @@ days/
     day-01-pulse.ts     ← le composant du jour (canvas, SVG, WebGL… au choix)
     README.md           ← ce que fait le code et le lien avec le mot
     preview.gif         ← (optionnel) l'aperçu à poster avec #devtober
+    preview.png         ← (optionnel) la miniature de la carte sur l'accueil
   registry.ts           ← liste des jours publiés, branchée sur le routing
 ```
 
@@ -68,10 +69,12 @@ Une fois le code écrit, demande à Claude Code « documente le jour 3 ». Le sk
 ### Le GIF d'aperçu
 
 ```bash
-npm run gif -- 3              # preview.gif (README), preview.mp4 (posts) et preview-embed.gif (liens partagés)
+npm run gif -- 3              # preview.gif (README), preview.mp4 (posts), preview-embed.gif (liens partagés) et preview.png (accueil)
 npm run gif -- 3 --preview    # 3 s seulement, pour vérifier le clic et le cadrage (preview-test.gif, non versionné)
 npm run gif -- 3 --light      # GIF plus léger (~9 Mo au lieu de ~13 pour 30 s)
 npm run gif -- 3 --embed-only # refait seulement preview-embed.gif, depuis le MP4 existant (sans refilmer)
+npm run gif -- 3 --no-thumbnail # tout sauf la miniature PNG
+npm run thumbnail -- 3        # refait seulement la miniature PNG (--at 12 : photo 12 s après le clic)
 ```
 
 Le script construit l'app, ouvre la page `/capture/day-03-bloom` dans Chrome (Playwright), la filme, puis convertit la vidéo avec ffmpeg. Cette page est hors de la barre de navigation : elle affiche le jour dans un carré, avec en bas un bandeau (numéro et mot à gauche, logo Marill.dev à droite). Ouverte dans un navigateur, elle montre le même carré, pratique pour régler le clic.
@@ -86,6 +89,8 @@ capture: { click: { x: 307, y: 534 }, seconds: 30, settle: 3000 },
 - `key` (optionnel) : une touche à presser pour lancer l'animation (nom Playwright : `'t'`, `'Space'`, `'Enter'`…), seule ou après le clic. Sans `click` ni `key`, le jour démarre tout seul : on filme dès que la page est chargée.
 - `seconds` : la durée filmée, à partir du clic ou de la touche.
 - `settle` : l'attente (ms) avant de cliquer ou d'appuyer, le temps que le jour finisse de charger (1500 par défaut).
+- `thumbnailFocus` (optionnel) : le cadrage vertical de la miniature 16/9 dans la scène carrée, de 0 (le haut) à 1 (le bas), 0,5 par défaut.
+- `thumbnailAt` (optionnel) : l'instant de la miniature, en secondes après le clic ou la touche (le tiers de `seconds` par défaut). À régler sur le moment où la scène est la plus parlante.
 
 Pour trouver les coordonnées d'un bouton, ouvre `/capture/day-03-bloom` en mode « appareil » 720 × 720 dans les outils de développement, ou mesure-le avec Playwright (`locator(...).boundingBox()`). Le registre est compilé dans l'app : après l'avoir modifié, relance sans `--skip-build`.
 
@@ -94,6 +99,12 @@ Il faut Google Chrome et ffmpeg installés.
 **GIF ou MP4 ?** Pour 30 s d'animation, le GIF pèse ~13 Mo (400 px, 256 couleurs, 12 images/s) alors que le MP4 (720 px, pleine qualité) en pèse ~4 : c'est le format à envoyer sur X, LinkedIn ou Instagram. Le GIF sert à l'aperçu du README, où une vidéo ne s'affiche pas. Un GIF est lourd par nature sur ces scènes (fonds en dégradé, lueurs qui changent à chaque image) : avec moins de 128 couleurs, les dégradés se découpent en aplats. Pour l'alléger sans les abîmer, `--light` ; sinon `--fps 10`, `--width 360` ou `--colors 128`. `--dither bayer` lisse les dégradés mais double le poids. Le script débruite la vidéo avant la palette, ce qui allège le GIF sans changer son aspect.
 
 Si l'image reste figée pendant les dernières secondes (la musique s'est coupée, un réseau lent…), le script le signale : une capture ratée ne se voit sinon qu'à l'œil. Relance simplement la commande. `npm run gif` sans argument donne la liste des options.
+
+### La miniature de l'accueil
+
+Chaque carte d'un jour publié sur l'accueil affiche son `preview.png`, pour qu'on voie d'un coup d'œil les univers différents. [`scripts/thumbnail.mjs`](./scripts/thumbnail.mjs) la génère : il joue le jour sur `/capture/<jour>` comme le script de GIF, attend l'instant `thumbnailAt`, puis photographie une bande 16/9 de la scène (sans le bandeau du bas, déjà redit par la carte), au format des cartes. `npm run gif` l'appelle à la fin : une seule commande produit tous les aperçus. `--preview` et `--embed-only` n'y touchent pas ; `npm run thumbnail -- 3` la refait seule, sans refilmer (`--focus 0.3` pour monter le cadrage).
+
+Le PNG reste dans le dossier du jour ; `angular.json` le sert sous `thumbnails/<jour>/preview.png`. Sans PNG, la carte s'affiche sans image. Le socle commun aux deux scripts (build, serveur, Chrome, clic) est dans [`scripts/lib/capture-env.mjs`](./scripts/lib/capture-env.mjs).
 
 ### L'aperçu des liens partagés
 

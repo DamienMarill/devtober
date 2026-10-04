@@ -17,6 +17,13 @@ export interface CaptureConfig {
   key?: string;
   /** Durée filmée (secondes), comptée à partir du clic ou de la touche, ou du chargement sans l'un ni l'autre. */
   seconds: number;
+  /**
+   * Instant de la miniature PNG (`npm run thumbnail`), en secondes après le clic ou la touche. Par défaut le tiers
+   * de `seconds` : à régler sur le moment où la scène est la plus parlante.
+   */
+  thumbnailAt?: number;
+  /** Cadrage vertical de la miniature 16/9 dans la scène carrée : 0 = le haut, 0.5 = le centre (défaut), 1 = le bas. */
+  thumbnailFocus?: number;
   /** Attente (ms) avant de cliquer ou de filmer, le temps que le jour finisse de charger. 1500 par défaut. */
   settle?: number;
 }
@@ -39,7 +46,7 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     component: () => import('./day-01-pulse/day-01-pulse').then((m) => m.default),
     readme: () => import('./day-01-pulse/README.md').then((m) => m.default),
     // Le bouton lecture d'*Iris Out* ; 30 s = la durée d'un extrait Deezer.
-    capture: { click: { x: 307, y: 534 }, seconds: 30, settle: 3000 },
+    capture: { click: { x: 307, y: 534 }, seconds: 30, settle: 3000, thumbnailFocus: 0.4 },
   },
   2: {
     component: () => import('./day-02-loop/day-02-loop').then((m) => m.default),
@@ -58,7 +65,7 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     component: () => import('./day-04-drift/day-04-drift').then((m) => m.default),
     readme: () => import('./day-04-drift/README.md').then((m) => m.default),
     // Pas de clic ni de touche : le trophée entre en dérapant dès le chargement, puis tourne sur son socle.
-    capture: { click: null, seconds: 10, settle: 400 },
+    capture: { click: null, seconds: 10, settle: 400, thumbnailFocus: 0.55 },
   },
   // new-day:insert
 };
