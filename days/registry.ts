@@ -54,5 +54,11 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     // aux cerisiers le temps de se peindre avant.
     capture: { click: null, key: 't', seconds: 30, settle: 5000 },
   },
+  4: {
+    component: () => import('./day-04-drift/day-04-drift').then((m) => m.default),
+    readme: () => import('./day-04-drift/README.md').then((m) => m.default),
+    // Pas de clic ni de touche : le trophée entre en dérapant dès le chargement, puis tourne sur son socle.
+    capture: { click: null, seconds: 10, settle: 400 },
+  },
   // new-day:insert
 };
