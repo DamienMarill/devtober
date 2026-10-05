@@ -114,7 +114,6 @@ export class Stage {
   private readonly glowPale: HTMLCanvasElement;
   private readonly bodyCrisp: HTMLCanvasElement;
   private readonly bodySoft: HTMLCanvasElement;
-  private readonly drifter: HTMLCanvasElement;
   private readonly wash: HTMLCanvasElement;
   private readonly aperture: HTMLCanvasElement;
   private readonly fog: CanvasPattern[];
@@ -171,12 +170,6 @@ export class Stage {
       [0.62, 'rgba(156,142,174,0.1)'],
       [1, 'rgba(140,128,160,0)'],
     ]);
-    this.drifter = radial(64, [
-      [0, 'rgba(204,214,230,0.9)'],
-      [0.22, 'rgba(186,200,222,0.42)'],
-      [0.55, 'rgba(170,186,214,0.1)'],
-      [1, 'rgba(160,180,210,0)'],
-    ]);
     this.wash = radial(256, [
       [0, 'rgba(255,208,148,1)'],
       [0.3, 'rgba(255,188,114,0.5)'],
@@ -231,17 +224,6 @@ export class Stage {
     this.drawMarks(field, u, cx, cy);
 
     ctx.globalCompositeOperation = 'lighter';
-    for (const drifter of field.drifters.pool) {
-      const a = drifter.alpha * CONFIG.drifters.alpha;
-      if (a < 0.003) continue;
-      const half = (CONFIG.drifters.radius * u) / 0.22;
-      const x = cx + (drifter.x - camX) * u;
-      const y = cy + (drifter.y - camY) * u;
-      if (x < -half || y < -half || x > w + half || y > h + half) continue;
-      ctx.globalAlpha = a;
-      ctx.drawImage(this.drifter, x - half, y - half, half * 2, half * 2);
-    }
-
     const warmth = Math.min(1, field.warmth);
     if (warmth > 0.003) {
       const r = 0.3 * u * (1 + warmth * 0.3);
@@ -262,17 +244,18 @@ export class Stage {
     const pale = smoothstep(0.2, 0.9, d);
     for (const g of field.glows.pool) {
       if (!g.active || g.alpha < 0.002) continue;
-      const a = g.alpha * p.glowIntensity;
       const x = cx + (g.x - camX) * u;
       const y = cy + (g.y - camY) * u;
-      const r = p.glowRadius * g.size * g.scale * u * 2.2;
-      const halo = r * 3;
-      ctx.globalAlpha = a * 0.12;
-      ctx.drawImage(this.glowWarm, x - halo, y - halo, halo * 2, halo * 2);
-      ctx.globalAlpha = a * (1 - pale);
-      ctx.drawImage(this.glowWarm, x - r, y - r, r * 2, r * 2);
-      ctx.globalAlpha = a * pale;
-      ctx.drawImage(this.glowPale, x - r, y - r, r * 2, r * 2);
+      this.drawLight(x, y, p.glowRadius * g.size * g.scale * u * 2.2, g.alpha * p.glowIntensity, pale);
+    }
+    // Les drifters sont des glows qui fuient : même sprite, même taille, même passe que les autres.
+    for (const drifter of field.drifters.pool) {
+      if (drifter.alpha < 0.002) continue;
+      const x = cx + (drifter.x - camX) * u;
+      const y = cy + (drifter.y - camY) * u;
+      const r = p.glowRadius * u * 2.2;
+      if (x < -r * 3 || y < -r * 3 || x > w + r * 3 || y > h + r * 3) continue;
+      this.drawLight(x, y, r, drifter.alpha * p.glowIntensity, pale);
     }
 
     if (p.clearing > 0.002) {
@@ -287,6 +270,18 @@ export class Stage {
       this.drawPicto(field.picto, bx, by + 0.17 * u, u);
     if (hud) this.drawHud(hud);
     ctx.globalAlpha = 1;
+  }
+
+  /** Une lumière (glow ou drifter) : halo large et faible, puis cœur, du chaud au pâle selon `pale`. */
+  private drawLight(x: number, y: number, r: number, alpha: number, pale: number): void {
+    const { ctx } = this;
+    const halo = r * 3;
+    ctx.globalAlpha = alpha * 0.12;
+    ctx.drawImage(this.glowWarm, x - halo, y - halo, halo * 2, halo * 2);
+    ctx.globalAlpha = alpha * (1 - pale);
+    ctx.drawImage(this.glowWarm, x - r, y - r, r * 2, r * 2);
+    ctx.globalAlpha = alpha * pale;
+    ctx.drawImage(this.glowPale, x - r, y - r, r * 2, r * 2);
   }
 
   private drawTurbulence(field: Field, u: number): void {

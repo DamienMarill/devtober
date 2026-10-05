@@ -60,6 +60,8 @@ export const CONFIG = {
     drag: [1.6, 6] as Range,
     /** Viscosity : constante de temps du lissage de l'input (s). */
     viscosity: [0.05, 0.35] as Range,
+    /** Fenêtre de density où poussée, vitesse max et courant résiduel tombent à 0 : la fin, l'immobilité. */
+    stall: [0.75, 0.97] as Range,
     /** Rayon (u), netteté (1 = contour net), luminosité. */
     radius: [0.014, 0.009] as Range,
     crisp: [1, 0] as Range,
@@ -143,8 +145,6 @@ export const CONFIG = {
     /** Vitesse d'éloignement en part de la vitesse max du body, errance (u/s). */
     speedShare: 1.15,
     wander: 0.025,
-    alpha: 0.35,
-    radius: 0.012,
   },
 
   marks: {

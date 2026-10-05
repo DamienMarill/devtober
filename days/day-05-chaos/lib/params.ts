@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-import { ramp } from './math';
+import { ramp, smoothstep } from './math';
 
 /** Tout ce qui découle de density, recalculé à chaque image dans un objet unique réutilisé. */
 export interface Params {
@@ -48,8 +48,9 @@ export function computeParams(p: Params, d: number, clearing: number): void {
   p.density = d;
   p.clearing = clearing;
 
-  p.thrust = ramp(B.thrust, d);
-  p.maxSpeed = ramp(B.maxSpeed, d);
+  const stall = 1 - smoothstep(B.stall[0], B.stall[1], d);
+  p.thrust = ramp(B.thrust, d) * stall;
+  p.maxSpeed = ramp(B.maxSpeed, d) * stall;
   p.drag = ramp(B.drag, d);
   p.viscosity = ramp(B.viscosity, d);
   p.bodyRadius = ramp(B.radius, d);
@@ -59,7 +60,7 @@ export function computeParams(p: Params, d: number, clearing: number): void {
   p.currentGain = ramp(C.gain, d, C.window) * (1 - clearing * 0.8);
   p.currentRate = ramp(C.rate, d);
   p.currentSpread = ramp(C.spread, d);
-  p.residual = ramp(C.residual, d, C.residualWindow) * (1 - clearing);
+  p.residual = ramp(C.residual, d, C.residualWindow) * (1 - clearing) * stall;
 
   p.cameraLag = ramp(CONFIG.camera.lag, d);
 
