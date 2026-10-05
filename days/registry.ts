@@ -67,5 +67,11 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     // Pas de clic ni de touche : le trophée entre en dérapant dès le chargement, puis tourne sur son socle.
     capture: { click: null, seconds: 10, settle: 400, thumbnailFocus: 0.55 },
   },
+  5: {
+    component: () => import('./day-05-chaos/day-05-chaos').then((m) => m.default),
+    readme: () => import('./day-05-chaos/README.md').then((m) => m.default),
+    // Pas de clic ni de touche : la scène au repos, avant le premier appui (nappes, grain, premier glow).
+    capture: { click: null, seconds: 10 },
+  },
   // new-day:insert
 };
