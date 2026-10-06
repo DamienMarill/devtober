@@ -73,5 +73,12 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     // Pas de clic ni de touche : la scène au repos, avant le premier appui (nappes, grain, premier glow).
     capture: { click: null, seconds: 10 },
   },
+  6: {
+    component: () => import('./day-06-tiny/day-06-tiny').then((m) => m.default),
+    readme: () => import('./day-06-tiny/README.md').then((m) => m.default),
+    // La touche T lance la tournée : cinq souches de 6 s, de Conway à Star Wars ; la miniature tombe sur
+    // Brian's Brain.
+    capture: { click: null, key: 't', seconds: 30, thumbnailAt: 14, thumbnailFocus: 0.42 },
+  },
   // new-day:insert
 };
