@@ -1,5 +1,7 @@
 # Jour 6 : Tiny
 
+![Aperçu](./preview.gif)
+
 TinyLife est un œuf virtuel de poche, avec écran LCD, qui élève des automates cellulaires : on choisit une souche ou on compose sa propre règle avec des interrupteurs au dos, on dessine sur l'écran et on regarde ce qui éclot.
 
 ## L'idée

@@ -78,7 +78,7 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     readme: () => import('./day-06-tiny/README.md').then((m) => m.default),
     // La touche T lance la tournée : cinq souches de 6 s, de Conway à Star Wars ; la miniature tombe sur
     // Brian's Brain.
-    capture: { click: null, key: 't', seconds: 30, thumbnailAt: 14, thumbnailFocus: 0.42 },
+    capture: { click: null, key: 't', seconds: 30, thumbnailAt: 15.5, thumbnailFocus: 0.42 },
   },
   // new-day:insert
 };
