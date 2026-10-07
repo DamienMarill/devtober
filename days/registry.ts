@@ -80,5 +80,19 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
     // Brian's Brain.
     capture: { click: null, key: 't', seconds: 30, thumbnailAt: 15.5, thumbnailFocus: 0.42 },
   },
+  7: {
+    component: () => import('./day-07-swarm/day-07-swarm').then((m) => m.default),
+    readme: () => import('./day-07-swarm/README.md').then((m) => m.default),
+    // La touche T lance la démo : 16 h 50 → ~20 h 50 au pilote automatique, avec le colis suspect de la
+    // gare Saint-Roch au bout de 6 s ; la miniature tombe pendant la fermeture de la station.
+    capture: {
+      click: null,
+      key: 't',
+      seconds: 30,
+      settle: 2500,
+      thumbnailAt: 7.2,
+      thumbnailFocus: 0.3,
+    },
+  },
   // new-day:insert
 };
