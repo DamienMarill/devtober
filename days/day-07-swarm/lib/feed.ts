@@ -45,6 +45,8 @@ export class Feed {
   private nextId = 1;
   private lastJoke = -Infinity;
   private lastDepotEmpty = -Infinity;
+  /** Incidents en cours qui imposent un ton sobre. */
+  private readonly sober = new Set<string>();
 
   constructor(
     private readonly net: Network,
@@ -57,20 +59,10 @@ export class Feed {
     switch (notice.kind) {
       case 'announce':
         return this.add(time, notice.event.text, 'event');
-      case 'start': {
-        const e = notice.event;
-        if (e.lead > 0) return null;
-        const where = notice.station !== undefined ? ` (vers ${name(notice.station)})` : '';
-        return this.add(
-          time,
-          e.effect.kind === 'breakdown' ? e.text.replace(' :', `${where} :`) : e.text,
-          'alert',
-          {
-            station: notice.station,
-            line: e.effect.kind === 'breakdown' ? e.effect.line : undefined,
-          },
-        );
-      }
+      case 'start':
+        return notice.event.lead > 0
+          ? null
+          : this.add(time, notice.event.text, 'alert', { station: notice.station });
       case 'end':
         return notice.event.done
           ? this.add(time, notice.event.done, 'info', { station: notice.station })
@@ -127,6 +119,36 @@ export class Feed {
           'Dépôt vide : retire une rame d’une ligne calme pour en renforcer une autre.',
           'info',
         );
+      case 'incident': {
+        if (notice.sober) {
+          if (notice.stage === 'end') this.sober.delete(notice.id);
+          else this.sober.add(notice.id);
+        }
+        const tone: Tone =
+          notice.stage === 'announce' ? 'event' : notice.stage === 'start' ? 'alert' : 'info';
+        return this.add(time, notice.text, tone, { station: notice.station, line: notice.line });
+      }
+      case 'plan':
+        return this.add(time, planText(notice, name), 'info', {
+          station: 'station' in notice ? notice.station : undefined,
+          line: 'line' in notice ? notice.line : undefined,
+        });
+      case 'order': {
+        const text = orderText(notice, name);
+        return text
+          ? this.add(time, text, 'info', { station: notice.station, line: notice.line })
+          : null;
+      }
+      case 'watchdog':
+        return this.add(
+          time,
+          `L${notice.line} : rame bloquée près de ${name(notice.station)}, rentrée au dépôt.`,
+          'alert',
+          {
+            station: notice.station,
+            line: notice.line,
+          },
+        );
     }
   }
 
@@ -160,6 +182,8 @@ export class Feed {
   }
 
   private joke(time: number, pool: readonly string[]): string | null {
+    // Pas de plaisanterie pendant un incident sérieux (épisode de pluie, inondation).
+    if (this.sober.size) return null;
     if (time - this.lastJoke < CONFIG.feed.jokeEvery) return null;
     this.lastJoke = time;
     return pool[Math.floor(this.rng() * pool.length)];
@@ -171,6 +195,40 @@ export class Feed {
     if (this.items.length > 40) this.items.length = 40;
     return item;
   }
+}
+
+type PlanNotice = Extract<Notice, { kind: 'plan' }>;
+type OrderNotice = Extract<Notice, { kind: 'order' }>;
+
+function planText(n: PlanNotice, name: (s: number) => string): string {
+  switch (n.change) {
+    case 'cut':
+      return `${name(n.station)} : circulation interrompue, les lignes sont coupées de part et d’autre.`;
+    case 'uncut':
+      return `${name(n.station)} : circulation rétablie.`;
+    case 'skip':
+      return `${name(n.station)} : station non desservie, les rames passent sans s’arrêter.`;
+    case 'unskip':
+      return `${name(n.station)} : desserte rétablie.`;
+    case 'deviation-on':
+      return `L${n.line} : itinéraire bis via Les Aubes et Pompignane.`;
+    case 'deviation-off':
+      return `L${n.line} : retour à l’itinéraire normal.`;
+  }
+}
+
+const ORDER_LABELS = {
+  hold: 'retenue 2 min à',
+  turnBack: 'demi-tour à',
+  deadhead: 'haut-le-pied après',
+  deviate: 'déviée via Pompignane depuis',
+  depot: 'rentre au dépôt après',
+} as const;
+
+function orderText(n: OrderNotice, name: (s: number) => string): string | null {
+  if (n.stage === 'done' && n.order !== 'deviate') return null;
+  if (n.stage === 'cancelled') return `L${n.line} · rame ${n.tram} : ordre annulé.`;
+  return `L${n.line} · rame ${n.tram} : ${ORDER_LABELS[n.order]} ${name(n.station)}.`;
 }
 
 const deployText = (line: number, n: number) =>

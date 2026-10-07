@@ -108,6 +108,15 @@ export const CONFIG = {
     terminusPlatforms: 3,
   },
 
+  /** Terminus provisoires (coupure) : battement plus court qu'à un vrai terminus, et deux quais. */
+  plan: { provisionalLayover: 1.5, provisionalPlatforms: 2 },
+
+  /** Ordres aux rames : durée d'une retenue ; une rame qui n'avance plus depuis `watchdog` minutes rentre. */
+  orders: { hold: 2, watchdog: 60 },
+
+  /** Points : +1 par voyageur arrivé, −3 par abandon, −1 par voyageur qui a attendu plus de `lateAfter` minutes. */
+  points: { arrived: 1, gaveUp: -3, late: -1, lateAfter: 10 },
+
   depot: {
     /** Délai de sortie de dépôt jusqu'au terminus, et de retour d'une rame retirée. */
     deploy: 5,
@@ -253,6 +262,12 @@ export const CONFIG = {
       5: '#3fae5a',
     } as Readonly<Record<number, string>>,
   },
+
+  /**
+   * À pied : voisins sous `max` mètres, marche directe jusqu'à `direct` mètres, à `speed` mètres par minute ;
+   * `waitGuess` : l'attente qu'on suppose avant de préférer marcher plutôt que prendre le tram.
+   */
+  walk: { max: 450, direct: 900, speed: 75, waitGuess: 3 },
 
   /** Seuils d'alerte : foule à quai (en points) et anneau de saturation. */
   crowd: { alert: 45, saturated: 70 },

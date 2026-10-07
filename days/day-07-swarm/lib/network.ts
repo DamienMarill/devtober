@@ -35,6 +35,9 @@ export interface Station {
   name: string;
   short: string;
   kind: StationKind;
+  /** Coordonnées réelles (pour les distances à pied : x et y sont déformés par la loupe). */
+  lat: number;
+  lon: number;
   /** Position sur la carte, en km « loupés » autour de la Comédie (y vers le bas). */
   x: number;
   y: number;
@@ -43,19 +46,28 @@ export interface Station {
   terminus: boolean;
 }
 
-/** Un sens de circulation d'une ligne : la liste des stations dans l'ordre où la rame les dessert. */
+/**
+ * Un sens de circulation d'une ligne : la liste des stations dans l'ordre où la rame les dessert. Les parcours de
+ * base viennent du GTFS ; le plan d'exploitation (`plan.ts`) en dérive d'autres (tronçons, déviation), tous
+ * identifiés par leur `key` et partagés (un même parcours = un même objet pendant toute la partie).
+ */
 export interface Path {
+  key: string;
   line: number;
-  /** Indice dans `line.paths`. */
-  index: number;
   stations: number[];
   /** `minutes[k]` : de `stations[k]` à `stations[k + 1]` (boucle : la dernière revient à la première). */
   minutes: number[];
   loop: boolean;
   /** Sens : 1 = sens du GTFS, -1 = retour. */
   dir: 1 | -1;
-  /** Branche (ligne 3 : 0 et 1 ; 0 ailleurs). */
-  branch: number;
+  /** Groupe de régulation : le tronçon exploité (les deux sens), ou un sens de la boucle. */
+  group: string;
+  /** Extrémités créées par une coupure (terminus provisoires), dans le sens de marche : [départ, arrivée]. */
+  provisional: readonly [boolean, boolean];
+  /** Déviation empruntée (`deviations.ts`), ou null. */
+  deviation: string | null;
+  /** Parcours d'une seule rame (déviation à la demande, repli) : hors du service régulier. */
+  oneOff: boolean;
   /** Rang de chaque station dans ce parcours, -1 si absente. */
   rank: Int16Array;
   /** Décalage latéral de la ligne à chaque station (vecteur à multiplier par l'écart en pixels). */
@@ -70,9 +82,11 @@ export interface Line {
   text: string;
   loop: boolean;
   capacity: number;
-  /** Aller puis retour de chaque branche (`paths[2b]`, `paths[2b + 1]`), ou les deux sens de la boucle. */
+  /** Parcours de base : aller puis retour de chaque branche (`paths[2b]`, `paths[2b + 1]`), ou les deux sens de la boucle. */
   paths: Path[];
   branches: number;
+  /** Stations de chaque branche dans le sens du GTFS (la boucle : dans le sens 1, sans répéter la première). */
+  base: number[][];
   fleet: readonly number[];
   trips: number;
   /** Stations desservies, sans doublon. */
@@ -85,7 +99,79 @@ export interface Network {
   byId: Map<string, number>;
   /** Tronçons (non orientés) et les lignes qui les empruntent. */
   segments: Map<string, number[]>;
+  /** Minutes de parcours de chaque tronçon (non orienté). */
+  hops: Map<string, number>;
+  /** Stations voisines à pied (distance réelle sous `CONFIG.walk.max`), avec la distance en mètres. */
+  walk: { to: number; metres: number }[][];
   bounds: { minX: number; maxX: number; minY: number; maxY: number };
+}
+
+/** Ce qu'il faut pour fabriquer un parcours : stations, temps des tronçons et lignes de chaque tronçon. */
+export type PathContext = Pick<Network, 'stations' | 'hops' | 'segments'>;
+
+export interface PathMeta {
+  group?: string;
+  provisional?: readonly [boolean, boolean];
+  deviation?: string | null;
+  oneOff?: boolean;
+  /** Ligne dont on emprunte la voie (décalage d'affichage) sur les tronçons que la ligne n'utilise pas. */
+  borrow?: number;
+  /** Tronçons parcourus plus lentement (déviation : aiguillages, voie d'une autre ligne) et le facteur. */
+  slow?: { edges: ReadonlySet<string>; factor: number };
+}
+
+export const pathKey = (
+  line: number,
+  dir: 1 | -1,
+  loop: boolean,
+  stations: readonly number[],
+  oneOff = false,
+) => `${line}|${dir}|${loop ? 'L' : 'S'}|${stations.join('.')}${oneOff ? '|1' : ''}`;
+
+/** Fabrique un parcours (temps, rangs, décalages) à partir d'une suite de stations reliées par de vrais tronçons. */
+export function createPath(
+  ctx: PathContext,
+  line: number,
+  stations: readonly number[],
+  dir: 1 | -1,
+  loop: boolean,
+  meta: PathMeta = {},
+): Path {
+  const ids = [...stations];
+  const count = loop ? ids.length : ids.length - 1;
+  const minutes: number[] = [];
+  for (let k = 0; k < count; k++) {
+    const key = segmentKey(ids[k], ids[(k + 1) % ids.length]);
+    const m = ctx.hops.get(key);
+    if (m === undefined)
+      throw new Error(`Pas de voie entre ${ids[k]} et ${ids[(k + 1) % ids.length]}`);
+    minutes.push(meta.slow?.edges.has(key) ? m * meta.slow.factor : m);
+  }
+  const rank = new Int16Array(ctx.stations.length).fill(-1);
+  ids.forEach((s, k) => (rank[s] = k));
+  const key = pathKey(line, dir, loop, ids, meta.oneOff);
+  const path: Path = {
+    key,
+    line,
+    stations: ids,
+    minutes,
+    loop,
+    dir,
+    group: meta.group ?? key,
+    provisional: meta.provisional ?? [false, false],
+    deviation: meta.deviation ?? null,
+    oneOff: meta.oneOff ?? false,
+    rank,
+    offsets: new Float32Array(ids.length * 2),
+  };
+  computeOffsets(path, ctx.stations, ctx.segments, meta.borrow);
+  return path;
+}
+
+/** Distance réelle entre deux stations, en mètres (projection équirectangulaire, largement assez à cette échelle). */
+export function metres(a: Station, b: Station): number {
+  const kx = 111_320 * Math.cos((CONFIG.map.lens.lat * Math.PI) / 180);
+  return Math.hypot((a.lon - b.lon) * kx, (a.lat - b.lat) * 110_570);
 }
 
 export const segmentKey = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
@@ -121,6 +207,8 @@ export function buildNetwork(
     name: s.name,
     short: shortName(s.id, s.name),
     kind: CONFIG.kinds[s.id] ?? 'home',
+    lat: s.lat,
+    lon: s.lon,
     ...project(s.lat, s.lon),
     lines: [],
     terminus: false,
@@ -134,37 +222,38 @@ export function buildNetwork(
       route.minutes.forEach((m, k) => hops.set(segmentKey(ids[k], ids[(k + 1) % ids.length]), m));
     }
   }
-  const timesOf = (ids: number[], loop: boolean) =>
-    ids
-      .slice(0, loop ? undefined : -1)
-      .map((a, k) => hops.get(segmentKey(a, ids[(k + 1) % ids.length]))!);
+  // Tronçons partagés : chaque ligne y est décalée sur le côté, comme sur un plan de métro.
+  const segments = new Map<string, number[]>();
+  const bases = lineData.map((data) =>
+    data.routes.map((r) => r.stations.map((id) => byId.get(id)!)),
+  );
+  lineData.forEach((data, li) => {
+    for (const ids of bases[li]) {
+      const n = data.loop ? ids.length : ids.length - 1;
+      for (let k = 0; k < n; k++) {
+        const key = segmentKey(ids[k], ids[(k + 1) % ids.length]);
+        const users = segments.get(key) ?? [];
+        if (!users.includes(data.id)) users.push(data.id);
+        segments.set(
+          key,
+          users.sort((a, b) => a - b),
+        );
+      }
+    }
+  });
+  const ctx: PathContext = { stations, hops, segments };
 
-  const lines: Line[] = lineData.map((data) => {
+  const lines: Line[] = lineData.map((data, li) => {
     const paths: Path[] = [];
-    data.routes.forEach((route, branch) => {
-      const forward = route.stations.map((id) => byId.get(id)!);
+    bases[li].forEach((forward) => {
       // Retour : à l'envers ; pour une boucle, on repart de la même station dans l'autre sens.
       const backward = data.loop
         ? [forward[0], ...forward.slice(1).reverse()]
         : [...forward].reverse();
-      for (const [ids, dir] of [
-        [forward, 1],
-        [backward, -1],
-      ] as const) {
-        const rank = new Int16Array(stationData.length).fill(-1);
-        ids.forEach((s, k) => (rank[s] = k));
-        paths.push({
-          line: data.id,
-          index: paths.length,
-          stations: ids,
-          minutes: timesOf(ids, data.loop),
-          loop: data.loop,
-          dir,
-          branch,
-          rank,
-          offsets: new Float32Array(ids.length * 2),
-        });
-      }
+      // Groupe de régulation : le tronçon (les deux sens d'une branche), ou chaque sens de la boucle.
+      const group = data.loop ? undefined : sectionKey(data.id, forward);
+      paths.push(createPath(ctx, data.id, forward, 1, data.loop, { group }));
+      paths.push(createPath(ctx, data.id, backward, -1, data.loop, { group }));
     });
     const unique = [...new Set(paths.flatMap((p) => p.stations))];
     for (const s of unique) stations[s].lines.push(data.id);
@@ -183,31 +272,21 @@ export function buildNetwork(
       capacity: CONFIG.tram.capacity[data.id] ?? CONFIG.tram.defaultCapacity,
       paths,
       branches: data.routes.length,
+      base: bases[li],
       fleet: data.fleet,
       trips: data.trips,
       stations: unique,
     };
   });
 
-  // Tronçons partagés : chaque ligne y est décalée sur le côté, comme sur un plan de métro.
-  const segments = new Map<string, number[]>();
-  for (const line of lines) {
-    for (const path of line.paths) {
-      const n = path.loop ? path.stations.length : path.stations.length - 1;
-      for (let k = 0; k < n; k++) {
-        const key = segmentKey(path.stations[k], path.stations[(k + 1) % path.stations.length]);
-        const users = segments.get(key) ?? [];
-        if (!users.includes(line.id)) users.push(line.id);
-        segments.set(
-          key,
-          users.sort((a, b) => a - b),
-        );
-      }
-    }
-  }
-  for (const line of lines) {
-    for (const path of line.paths) computeOffsets(path, stations, segments);
-  }
+  // À pied : les stations à moins de `CONFIG.walk.max` mètres les unes des autres.
+  const walk = stations.map((a) =>
+    stations
+      .filter((b) => b !== a)
+      .map((b) => ({ to: b.index, metres: metres(a, b) }))
+      .filter((w) => w.metres <= CONFIG.walk.max)
+      .sort((x, y) => x.metres - y.metres),
+  );
 
   let minX = Infinity;
   let maxX = -Infinity;
@@ -219,7 +298,7 @@ export function buildNetwork(
     minY = Math.min(minY, s.y);
     maxY = Math.max(maxY, s.y);
   }
-  return { stations, lines, byId, segments, bounds: { minX, maxX, minY, maxY } };
+  return { stations, lines, byId, segments, hops, walk, bounds: { minX, maxX, minY, maxY } };
 }
 
 /**
@@ -237,15 +316,30 @@ export function segmentNormal(a: Station, b: Station): { x: number; y: number } 
   return { x: dy / len, y: -dx / len };
 }
 
-/** Décalage de chaque station d'un parcours : moyenne des décalages des deux tronçons qui l'encadrent. */
-function computeOffsets(path: Path, stations: Station[], segments: Map<string, number[]>): void {
+/** La clé d'un tronçon exploité : la ligne et ses stations dans le sens du GTFS. */
+export const sectionKey = (line: number, stations: readonly number[]) =>
+  `${line}|S|${stations.join('.')}`;
+
+/**
+ * Décalage de chaque station d'un parcours : moyenne des décalages des deux tronçons qui l'encadrent. Sur un tronçon
+ * que la ligne n'utilise pas d'habitude (déviation), on prend la voie de la ligne `borrow`.
+ */
+export function computeOffsets(
+  path: Path,
+  stations: readonly Station[],
+  segments: ReadonlyMap<string, number[]>,
+  borrow?: number,
+): void {
   const ids = path.stations;
   const n = ids.length;
   const shift = (k: number) => {
     const a = stations[ids[k]];
     const b = stations[ids[(k + 1) % n]];
-    const users = segments.get(segmentKey(a.index, b.index))!;
-    const slot = users.indexOf(path.line) - (users.length - 1) / 2;
+    const users = segments.get(segmentKey(a.index, b.index)) ?? [];
+    let lane = users.indexOf(path.line);
+    if (lane < 0 && borrow !== undefined) lane = users.indexOf(borrow);
+    if (lane < 0) lane = 0;
+    const slot = users.length ? lane - (users.length - 1) / 2 : 0;
     const nrm = segmentNormal(a, b);
     return { x: nrm.x * slot, y: nrm.y * slot };
   };

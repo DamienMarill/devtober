@@ -34,6 +34,7 @@ export class Demand {
   private readonly cdf: Float64Array;
   private cdfMinute = -1;
   private cdfVersion = -1;
+  private cdfBoost: Float64Array | null = null;
 
   constructor(private readonly net: Network) {
     const density = new Map(net.lines.map((l) => [l.id, Math.max(...l.fleet) / l.stations.length]));
@@ -59,7 +60,8 @@ export class Demand {
 
   /**
    * Tire une destination au hasard, proportionnellement à l'attractivité (multipliée par `boost`, celui des
-   * événements). La table cumulée est recalculée une fois par minute, ou quand `version` change.
+   * événements). La table cumulée est recalculée une fois par minute, ou quand `version` ou `boost` change
+   * (deux flux de demande peuvent partager la même instance).
    */
   pick(
     origin: number,
@@ -69,7 +71,7 @@ export class Demand {
     version = 0,
   ): number {
     const m = Math.floor(minute);
-    if (m !== this.cdfMinute || version !== this.cdfVersion) {
+    if (m !== this.cdfMinute || version !== this.cdfVersion || boost !== this.cdfBoost) {
       let sum = 0;
       for (let s = 0; s < this.cdf.length; s++) {
         sum += this.attraction(s, m) * boost[s];
@@ -77,6 +79,7 @@ export class Demand {
       }
       this.cdfMinute = m;
       this.cdfVersion = version;
+      this.cdfBoost = boost;
     }
     const total = this.cdf[this.cdf.length - 1];
     for (let tries = 0; tries < 8; tries++) {

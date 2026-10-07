@@ -3,13 +3,11 @@ import { autopilot, decide, targets } from './autopilot';
 import { CONFIG } from './config';
 import { Demand } from './demand';
 import { buildNetwork } from './network';
-import { computeRoutes } from './routing';
 import { Sim } from './sim';
 
 const net = buildNetwork();
-const routes = computeRoutes(net);
 const demand = new Demand(net);
-const make = () => new Sim(net, routes, demand, { track: false, demand: false });
+const make = () => new Sim(net, demand, { track: false, demand: false });
 
 describe('autopilot', () => {
   it('répartit toute la flotte entre les lignes, avec un minimum par ligne', () => {

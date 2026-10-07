@@ -6,8 +6,8 @@ export interface Report {
   served: number;
   /** Voyageurs partis à pied. */
   lost: number;
-  /** Voyageurs évacués (colis suspect) : ni servis ni perdus. */
-  evacuated: number;
+  /** Voyageurs arrivés à pied (réseau coupé) : ni servis ni perdus. */
+  walked: number;
   /** Part des voyageurs servis parmi ceux qui ont fini leur journée (servis + perdus). */
   share: number;
   /** Attente moyenne à quai, en minutes. */
@@ -27,6 +27,17 @@ export const NOTE = { floor: 0.72, top: 0.985 };
 export function noteFor(share: number): number {
   const x = (share - NOTE.floor) / (NOTE.top - NOTE.floor);
   return Math.round(Math.max(0, Math.min(1, x)) * 40) / 2;
+}
+
+/**
+ * La note face au fantôme : 10/20 à égalité ; 20/20 si l'on évite la moitié des pertes que le fantôme a subies
+ * (par rapport au score parfait : tout le monde arrivé en tram sans attendre plus de 10 minutes) ; 0/20 si l'on
+ * en subit autant de plus. Au demi-point.
+ */
+export function noteVsGhost(player: number, ghost: number, perfect: number): number {
+  const room = Math.max((perfect - ghost) * 0.5, perfect * 0.02, 1);
+  const x = Math.max(-1, Math.min(1, (player - ghost) / room));
+  return Math.round((10 + 10 * x) * 2) / 2;
 }
 
 /** Le titre de la journée : le seul endroit franchement taquin du PC. */
@@ -54,7 +65,7 @@ export function makeReport(sim: Sim): Report {
   return {
     served: st.arrived * size,
     lost: st.abandoned * size,
-    evacuated: st.evacuated * size,
+    walked: st.walked * size,
     share,
     wait: st.waits ? st.waitSum / st.waits : 0,
     worst,

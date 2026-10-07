@@ -1,13 +1,11 @@
-/** Ce qu'un événement change dans la journée. */
+/**
+ * Ce qu'un événement prévu change à la demande (les imprévus, eux, sont dans `incidents.ts`).
+ */
 export type Effect =
   /** Destinations plus courues : coefficient multiplicateur par station. */
   | { kind: 'attract'; boost: Readonly<Record<string, number>> }
   /** Une foule à évacuer : `riders` points répartis sur la fenêtre, depuis ces stations (part de chacune). */
-  | { kind: 'surge'; from: Readonly<Record<string, number>>; riders: number }
-  /** Station fermée : aucune rame n'y entre ni n'en sort, les quais sont évacués. */
-  | { kind: 'block'; station: string }
-  /** Une rame de la ligne tombe en panne entre deux stations ; les suivantes attendent derrière. */
-  | { kind: 'breakdown'; line: number; minutes: number };
+  | { kind: 'surge'; from: Readonly<Record<string, number>>; riders: number };
 
 export interface ScenarioEvent {
   id: string;
@@ -28,8 +26,8 @@ export interface ScenarioEvent {
 const hm = (h: number, m = 0) => h * 60 + m;
 
 /**
- * Un mercredi d'octobre au PC tram. Les lieux et les horaires des lignes sont réels, les événements sont
- * inventés (mais plausibles).
+ * Un mercredi d'octobre au PC tram : ce qui est prévu. Les lieux et les horaires des lignes sont réels, les
+ * événements sont inventés (mais plausibles). Le soir, c'est match ou concert, tiré au sort à chaque partie.
  */
 export const WEDNESDAY: readonly ScenarioEvent[] = [
   {
@@ -50,16 +48,6 @@ export const WEDNESDAY: readonly ScenarioEvent[] = [
     },
   },
   {
-    id: 'panne',
-    at: hm(10, 20),
-    until: hm(10, 35),
-    lead: 0,
-    title: 'Panne sur la 2',
-    text: 'Rame immobilisée sur la 2 : intervention en cours, environ 15 minutes.',
-    done: 'L2 : la rame en panne est repartie.',
-    effect: { kind: 'breakdown', line: 2, minutes: 15 },
-  },
-  {
     id: 'mercredi',
     at: hm(13, 30),
     until: hm(17, 0),
@@ -67,16 +55,6 @@ export const WEDNESDAY: readonly ScenarioEvent[] = [
     title: 'Mercredi après-midi',
     text: 'Mercredi après-midi : centres de loisirs au zoo de Lunaret (ligne 5), cinéma et aquarium à Odysseum (ligne 1).',
     effect: { kind: 'attract', boost: { 'cnrs-zoo-de-lunaret': 6, odysseum: 2.5 } },
-  },
-  {
-    id: 'colis',
-    at: hm(17, 40),
-    until: hm(17, 55),
-    lead: 0,
-    title: 'Colis suspect',
-    text: 'Colis suspect à la gare Saint-Roch : station fermée, lignes 1, 2, 3 et 4 interrompues. Levée de doute en cours.',
-    done: 'Gare Saint-Roch : levée de doute terminée, la circulation reprend.',
-    effect: { kind: 'block', station: 'gare-saint-roch' },
   },
   {
     id: 'match-aller',
@@ -115,3 +93,11 @@ export const WEDNESDAY: readonly ScenarioEvent[] = [
     effect: { kind: 'surge', from: { 'parc-expo': 1 }, riders: 100 },
   },
 ];
+
+export type Evening = 'match' | 'concert';
+
+/** La journée prévue avec l'événement du soir choisi (le match ou le concert, pas les deux). */
+export function dayEvents(evening: Evening): ScenarioEvent[] {
+  const other = evening === 'match' ? 'concert' : 'match';
+  return WEDNESDAY.filter((e) => !e.id.startsWith(other));
+}
