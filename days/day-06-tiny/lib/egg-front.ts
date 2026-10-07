@@ -1,7 +1,7 @@
 import { Component, ElementRef, input, output, viewChild } from '@angular/core';
-import { CONFIG } from './lib/config';
-import { Verdict } from './lib/cycle';
-import { ICON_PIXELS, IconId } from './lib/icons';
+import { CONFIG } from './config';
+import { Verdict } from './cycle';
+import { ICON_PIXELS, IconId } from './icons';
 
 /**
  * La face avant de l'œuf : la coque, l'écran LCD (le canvas que dessine `Lcd`, entouré des pictogrammes

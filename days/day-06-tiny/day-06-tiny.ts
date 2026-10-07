@@ -9,8 +9,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { EggBack } from './egg-back';
-import { EggFront } from './egg-front';
+import { EggBack } from './lib/egg-back';
+import { EggFront } from './lib/egg-front';
 import { Piezo } from './lib/audio';
 import { CONFIG } from './lib/config';
 import { CycleWatch, Verdict } from './lib/cycle';

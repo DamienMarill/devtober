@@ -1,9 +1,9 @@
 import { Component, computed, input, model, output } from '@angular/core';
-import { CONFIG } from './lib/config';
-import { NEIGHBORHOOD_PIXELS } from './lib/icons';
-import { Preset } from './lib/presets';
-import { MAX_STATES, MIN_STATES, NEIGHBORS, Neighborhood, Rule, formatRule } from './lib/rule';
-import { START_IDS, StartId, isRandomStart, startLabel } from './lib/seed';
+import { CONFIG } from './config';
+import { NEIGHBORHOOD_PIXELS } from './icons';
+import { Preset } from './presets';
+import { MAX_STATES, MIN_STATES, NEIGHBORS, Neighborhood, Rule, formatRule } from './rule';
+import { START_IDS, StartId, isRandomStart, startLabel } from './seed';
 
 const COUNTS = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
 
