@@ -79,6 +79,13 @@ export function responder(
         }
       }
 
+      const cutStations = (id: string, stations: readonly number[]) => {
+        for (const st of stations) {
+          if (cuts.get(st)?.has(id)) continue;
+          want(cuts, st, id);
+          sim.setCut(st, true);
+        }
+      };
       for (const inc of active) {
         const s = inc.spec;
         switch (s.kind) {
@@ -104,16 +111,12 @@ export function responder(
           }
           case 'scooter':
           case 'illness':
-            if (!opts.cutShort) break;
-          // fallthrough
+            if (opts.cutShort) cutStations(s.id, s.stations);
+            break;
           case 'package':
           case 'power':
           case 'rain':
-            for (const st of s.stations) {
-              if (cuts.get(st)?.has(s.id)) continue;
-              want(cuts, st, s.id);
-              sim.setCut(st, true);
-            }
+            cutStations(s.id, s.stations);
             break;
           case 'cortege': {
             const route = s.stations;

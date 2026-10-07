@@ -11,6 +11,8 @@ const enum Mode {
   Leave,
   /** A abandonné : gris, il part à pied. */
   Walk,
+  /** Marche d'une station à une autre (réseau coupé, correspondance à pied), au rythme de la simulation. */
+  Transit,
 }
 
 interface Dot {
@@ -29,12 +31,18 @@ interface Dot {
   t: number;
   life: number;
   alpha: number;
+  /** Marche : stations de départ et d'arrivée, début et fin (minutes simulées). */
+  to: number;
+  start: number;
+  until: number;
 }
 
 const BOARD_TIME = 0.35;
 const LEAVE_TIME = 0.7;
 const WALK_TIME = 1.8;
 const GREY = 'rgba(170, 170, 190, 0.85)';
+/** Les marcheurs (couleur neutre) ont l'indice de couleur -2. */
+const WALKER = 'rgba(214, 226, 255, 0.95)';
 
 /**
  * L'essaim : un point par groupe de 10 voyageurs. Les points à quai forment une nuée autour de leur station
@@ -72,9 +80,9 @@ export class Swarm {
     this.clear();
     const r = this.renderer;
     sim.waiting.forEach((lists, s) => {
-      const n = lists.reduce((sum, l) => sum + l.length, 0);
+      const n = lists.reduce((sum, l) => sum + l.length, 0) + sim.stranded[s].length;
       const radius = this.spacing * Math.sqrt(n) * 0.6;
-      for (const list of lists) {
+      for (const list of [...lists, sim.stranded[s]]) {
         for (const rider of list) {
           const a = this.random() * Math.PI * 2;
           const d = Math.sqrt(this.random()) * radius;
@@ -82,6 +90,27 @@ export class Swarm {
         }
       }
     });
+    for (const rider of sim.walkers) {
+      const dot = this.addWait(rider, r.sx[rider.walkFrom], r.sy[rider.walkFrom], 1);
+      this.toTransit(
+        dot,
+        rider.walkFrom,
+        rider.legs[rider.leg].to,
+        rider.walkStart,
+        rider.walkUntil,
+      );
+    }
+  }
+
+  private toTransit(dot: Dot, from: number, to: number, start: number, until: number): void {
+    dot.mode = Mode.Transit;
+    dot.color = -2;
+    dot.station = from;
+    dot.fx = dot.x;
+    dot.fy = dot.y;
+    dot.to = to;
+    dot.start = start;
+    dot.until = until;
   }
 
   /** Recale les points après un redimensionnement (ancienne et nouvelle échelle de la carte). */
@@ -111,6 +140,12 @@ export class Swarm {
     return this.seed / 4294967296;
   }
 
+  /** Couleur d'un point à quai : la ligne qu'il attend (neutre s'il n'a plus d'itinéraire). */
+  private colorOf(rider: Rider): number {
+    const leg = rider.legs[rider.leg];
+    return leg?.kind === 'ride' ? this.lineIndex.get(leg.line)! : -2;
+  }
+
   private addWait(rider: Rider, x: number, y: number, alpha: number): Dot {
     const dot: Dot = {
       rider,
@@ -119,7 +154,7 @@ export class Swarm {
       y,
       vx: 0,
       vy: 0,
-      color: this.lineIndex.get(rider.legs[rider.leg].line)!,
+      color: this.colorOf(rider),
       station: rider.station,
       tram: null,
       fx: x,
@@ -127,6 +162,9 @@ export class Swarm {
       t: 0,
       life: 0,
       alpha,
+      to: rider.station,
+      start: 0,
+      until: 0,
     };
     this.dots.push(dot);
     this.byRider.set(rider.id, dot);
@@ -180,12 +218,45 @@ export class Swarm {
               t: 0,
               life: LEAVE_TIME,
               alpha: 0.75,
+              to: e.rider.station,
+              start: 0,
+              until: 0,
             });
           }
           break;
         }
-        case 'abandon':
-        case 'evacuate': {
+        case 'walk': {
+          let dot = this.byRider.get(e.rider.id);
+          if (!dot) dot = this.addWait(e.rider, r.sx[e.from], r.sy[e.from], 1);
+          this.toTransit(dot, e.from, e.to, e.start, e.until);
+          break;
+        }
+        case 'walked': {
+          const dot = this.byRider.get(e.rider.id);
+          if (!dot) break;
+          if (e.done) {
+            this.byRider.delete(e.rider.id);
+            dot.rider = null;
+            dot.mode = Mode.Leave;
+            dot.vx = 0;
+            dot.vy = 0;
+            dot.t = 0;
+            dot.life = LEAVE_TIME;
+          } else {
+            dot.mode = Mode.Wait;
+            dot.station = e.rider.station;
+            dot.color = this.colorOf(e.rider);
+          }
+          break;
+        }
+        case 'reroute': {
+          const dot = this.byRider.get(e.rider.id);
+          if (!dot || dot.mode !== Mode.Wait) break;
+          dot.color = this.colorOf(e.rider);
+          dot.station = e.rider.station;
+          break;
+        }
+        case 'abandon': {
           const dot = this.byRider.get(e.rider.id);
           if (!dot) break;
           this.byRider.delete(e.rider.id);
@@ -193,21 +264,22 @@ export class Swarm {
           const dx = dot.x - r.sx[s];
           const dy = dot.y - r.sy[s];
           const len = Math.hypot(dx, dy) || 1;
-          const speed = e.kind === 'evacuate' ? 30 : 10 + this.random() * 8;
+          const speed = 10 + this.random() * 8;
           dot.mode = Mode.Walk;
           dot.rider = null;
-          dot.color = e.kind === 'evacuate' ? dot.color : -1;
+          dot.color = -1;
           dot.vx = (dx / len) * speed;
           dot.vy = (dy / len) * speed;
           dot.t = 0;
-          dot.life = e.kind === 'evacuate' ? LEAVE_TIME : WALK_TIME;
+          dot.life = WALK_TIME;
           break;
         }
       }
     }
   }
 
-  update(dt: number): void {
+  /** Avance les points de `dt` secondes réelles ; `simTime` (minutes) cale les marcheurs sur la simulation. */
+  update(dt: number, simTime: number): void {
     const r = this.renderer;
     const spacing = this.spacing;
     const cell = spacing;
@@ -276,6 +348,19 @@ export class Swarm {
           if (f >= 1) this.dots.splice(i, 1);
           break;
         }
+        case Mode.Transit: {
+          const f = Math.max(
+            0,
+            Math.min(1, (simTime - d.start) / Math.max(0.01, d.until - d.start)),
+          );
+          const tx = r.sx[d.station] + (r.sx[d.to] - r.sx[d.station]) * f;
+          const ty = r.sy[d.station] + (r.sy[d.to] - r.sy[d.station]) * f;
+          // Un peu de flottement autour de la ligne droite : on marche en groupe, pas sur un rail.
+          d.x += (tx - d.x) * Math.min(1, dt * 8) + (this.random() - 0.5) * 0.6;
+          d.y += (ty - d.y) * Math.min(1, dt * 8) + (this.random() - 0.5) * 0.6;
+          d.alpha = Math.min(1, d.alpha + dt * 4);
+          break;
+        }
         case Mode.Leave:
         case Mode.Walk: {
           const f = d.t / d.life;
@@ -292,7 +377,7 @@ export class Swarm {
   draw(ctx: CanvasRenderingContext2D): void {
     const rad = this.radius;
     // Un chemin par couleur (et par palier d'opacité) : quelques milliers de points en une poignée d'appels.
-    for (let c = -1; c < this.colors.length; c++) {
+    for (let c = -2; c < this.colors.length; c++) {
       for (const band of [1, 0.6, 0.3]) {
         ctx.beginPath();
         let any = false;
@@ -306,7 +391,7 @@ export class Swarm {
         }
         if (!any) continue;
         ctx.globalAlpha = band;
-        ctx.fillStyle = c < 0 ? GREY : this.colors[c];
+        ctx.fillStyle = c === -2 ? WALKER : c === -1 ? GREY : this.colors[c];
         ctx.fill();
       }
     }

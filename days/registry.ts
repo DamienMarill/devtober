@@ -83,14 +83,15 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
   7: {
     component: () => import('./day-07-swarm/day-07-swarm').then((m) => m.default),
     readme: () => import('./day-07-swarm/README.md').then((m) => m.default),
-    // La touche T lance la démo : 16 h 50 → ~20 h 50 au pilote automatique, avec le colis suspect de la
-    // gare Saint-Roch au bout de 6 s ; la miniature tombe pendant la fermeture de la station.
+    // La touche T lance la démo (journée n° 12) : 15 h 35 → ~19 h 35, le régulateur automatique aux commandes.
+    // La manif part de la Comédie au bout de 1,5 s (la 1 passe par Pompignane) ; la miniature tombe à 16 h 15,
+    // cortège dans l'Écusson et voiture sur la voie vers Château d'Ô.
     capture: {
       click: null,
       key: 't',
       seconds: 30,
       settle: 2500,
-      thumbnailAt: 7.2,
+      thumbnailAt: 5,
       thumbnailFocus: 0.3,
     },
   },

@@ -16,6 +16,8 @@ export interface LineRow {
   wait: number;
   /** 0 : fluide, 1 : tendu, 2 : saturé. */
   level: 0 | 1 | 2;
+  /** Itinéraire bis possible sur cette ligne (la 1 via Pompignane), et s'il est en service. */
+  deviation: { id: string; label: string; on: boolean } | null;
 }
 
 /** Le panneau des lignes : une pastille par ligne, ses rames, sa foule, et les boutons − / +. */
@@ -51,6 +53,28 @@ export interface LineRow {
             <span class="dot"></span>{{ row.waiting }}
           </span>
           <span class="buttons">
+            @if (row.deviation; as dev) {
+              <button
+                type="button"
+                class="step dev"
+                [class.on]="dev.on"
+                [attr.aria-pressed]="dev.on"
+                [attr.aria-label]="'Itinéraire bis de la ligne ' + row.id + ' ' + dev.label"
+                [title]="'Itinéraire bis ' + dev.label"
+                (click)="deviate.emit(dev.id)"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M3 13V8a4 4 0 0 1 4-4h5m0 0-2.5-2.5M12 4l-2.5 2.5"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    fill="none"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            }
             <button
               type="button"
               class="step"
@@ -207,6 +231,19 @@ export interface LineRow {
     .step:hover {
       background: rgb(255 255 255 / 0.16);
     }
+    /* En colonnes étroites, l'itinéraire bis passe par le popover des stations concernées. */
+    .step.dev {
+      display: none;
+      place-items: center;
+    }
+    .step.dev svg {
+      width: 0.9rem;
+      height: 0.9rem;
+    }
+    .step.dev.on {
+      background: var(--primary);
+      border-color: transparent;
+    }
     .step:active {
       transform: translateY(1px);
     }
@@ -242,6 +279,9 @@ export interface LineRow {
         width: 1.75rem;
         height: 1.75rem;
       }
+      .step.dev {
+        display: grid;
+      }
     }
   `,
 })
@@ -251,4 +291,5 @@ export class FleetPanel {
   readonly pick = output<number>();
   readonly add = output<number>();
   readonly remove = output<number>();
+  readonly deviate = output<string>();
 }

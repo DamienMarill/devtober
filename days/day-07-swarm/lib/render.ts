@@ -1,5 +1,8 @@
 import { CONFIG } from './config';
-import { Network, project } from './network';
+import { DEVIATIONS } from './deviations';
+import { IncidentEngine } from './incidents';
+import { Network, Path, project, segmentKey } from './network';
+import { deviationSlow } from './plan';
 import { Sim, Tram } from './sim';
 import type { Swarm } from './swarm';
 
@@ -42,6 +45,11 @@ export class Renderer {
   private dirty = true;
   private readonly pings: Ping[] = [];
   private clock = 0;
+  /** Le plan dessiné (recalculé quand la version du réseau change). */
+  private planVersion = -1;
+  private unserved: { path: Path; k: number }[] = [];
+  private deviated: { path: Path; k: number }[] = [];
+  private provisional: { station: number; colors: string[] }[] = [];
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -99,6 +107,21 @@ export class Renderer {
     return 3.6 * this.unit;
   }
 
+  /** La rame la plus proche du pointeur, à moins de 12 px (pour lui donner un ordre). */
+  tramAt(x: number, y: number, trams: readonly Tram[]): Tram | null {
+    let best: Tram | null = null;
+    let bestD = 12 * 12;
+    for (const t of trams) {
+      const p = this.tramPoint(t);
+      const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
+    }
+    return best;
+  }
+
   /** La station la plus proche du pointeur, à moins de 14 px. */
   stationAt(x: number, y: number): number | null {
     let best: number | null = null;
@@ -142,7 +165,13 @@ export class Renderer {
 
   // ------------------------------------------------------------ dessin
 
-  draw(sim: Sim, swarm: Swarm, dt: number, hover: number | null): void {
+  draw(
+    sim: Sim,
+    swarm: Swarm,
+    dt: number,
+    hover: number | null,
+    selectedTram: Tram | null = null,
+  ): void {
     if (this.dirty) this.paintLayer();
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -157,10 +186,13 @@ export class Renderer {
       ctx.fillRect(0, 0, this.width, this.height);
     }
 
+    this.paintPlan(sim);
     this.paintCrowdHalos(sim);
     swarm.draw(ctx);
-    this.paintTrams(sim);
-    this.paintBlocked(sim);
+    this.paintCortege(sim);
+    this.paintTrams(sim, selectedTram);
+    this.paintIncidents(sim);
+    if (sim.slow > 1) this.paintRain();
     this.paintPings(dt);
     if (hover !== null) {
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -194,7 +226,7 @@ export class Renderer {
     }
   }
 
-  private paintTrams(sim: Sim): void {
+  private paintTrams(sim: Sim, selected: Tram | null): void {
     const ctx = this.ctx;
     const u = this.unit;
     for (const tram of sim.trams) {
@@ -213,7 +245,14 @@ export class Renderer {
       ctx.fill();
       ctx.fillStyle = tram.line.display;
       roundRect(ctx, -len / 2, -wid / 2, len, wid, wid / 2);
-      ctx.fill();
+      if (tram.mode === 'deadhead') {
+        // Haut-le-pied : une rame vide, juste le contour.
+        ctx.strokeStyle = tram.line.display;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      } else {
+        ctx.fill();
+      }
       // Jauge de remplissage : la part blanche avance de l'arrière vers l'avant.
       if (load > 0) {
         ctx.fillStyle = load >= 0.95 ? '#ffffff' : 'rgba(255,255,255,0.78)';
@@ -228,31 +267,288 @@ export class Renderer {
         );
         ctx.fill();
       }
-      if (tram.broken > 0 && Math.sin(this.clock * 10) > 0) {
+      if (tram.immobile > 0 && Math.sin(this.clock * 10) > 0) {
         ctx.strokeStyle = '#ff4d5e';
         ctx.lineWidth = 2;
         roundRect(ctx, -len / 2 - 2, -wid / 2 - 2, len + 4, wid + 4, wid / 2 + 2);
         ctx.stroke();
       }
+      if (tram.order || tram.holdUntil > sim.time) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.setLineDash([2, 2]);
+        ctx.lineWidth = 1.2;
+        roundRect(ctx, -len / 2 - 2.5, -wid / 2 - 2.5, len + 5, wid + 5, wid / 2 + 2.5);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+      if (tram === selected) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 11 * u, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (tram.immobile > 0)
+        this.badge(x, y - 9 * u, tram.cause === 'illness' ? '+' : '!', '#ff4d5e');
+    }
+  }
+
+  /** Le plan du joueur : tronçons sans service estompés, déviation en pointillés, stations coupées ou sautées. */
+  private paintPlan(sim: Sim): void {
+    if (sim.netVersion !== this.planVersion) this.measurePlan(sim);
+    const ctx = this.ctx;
+    const u = this.unit;
+    const g = this.gap;
+    const width = 3.4 * u;
+    const point = (path: Path, k: number) => ({
+      x: this.sx[path.stations[k]] + path.offsets[k * 2] * g,
+      y: this.sy[path.stations[k]] + path.offsets[k * 2 + 1] * g,
+    });
+    const segment = (path: Path, k: number) => {
+      const a = point(path, k);
+      const b = point(path, (k + 1) % path.stations.length);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    };
+    if (this.unserved.length) {
+      ctx.strokeStyle = 'rgba(11, 8, 48, 0.78)';
+      ctx.lineWidth = width + 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const { path, k } of this.unserved) segment(path, k);
+      ctx.stroke();
+    }
+    for (const { path, k } of this.deviated) {
+      const line = this.net.lines.find((l) => l.id === path.line)!;
+      ctx.strokeStyle = line.display;
+      ctx.lineWidth = width;
+      ctx.setLineDash([5 * u, 4 * u]);
+      ctx.lineDashOffset = -this.clock * 12;
+      ctx.beginPath();
+      segment(path, k);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    for (const { station, colors } of this.provisional) {
+      colors.forEach((c, i) => {
+        ctx.strokeStyle = c;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.sx[station], this.sy[station], (6.5 + i * 2.6) * u, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+    }
+    for (let s = 0; s < this.sx.length; s++) {
+      const x = this.sx[s];
+      const y = this.sy[s];
+      if (sim.plan.isCut(s)) {
+        const r = 6 * u;
+        ctx.fillStyle = 'rgba(255, 77, 94, 0.25)';
+        ctx.strokeStyle = '#ff4d5e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.moveTo(x - r * 0.7, y + r * 0.7);
+        ctx.lineTo(x + r * 0.7, y - r * 0.7);
+        ctx.stroke();
+      } else if (sim.plan.isSkipped(s)) {
+        ctx.fillStyle = BG;
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.arc(x, y, 4 * u, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
+  /** Ce qui a changé dans le plan : tronçons sans service, morceaux déviés, terminus provisoires. */
+  private measurePlan(sim: Sim): void {
+    this.planVersion = sim.netVersion;
+    this.unserved = [];
+    this.deviated = [];
+    this.provisional = [];
+    for (const line of this.net.lines) {
+      const svc = sim.serviceOf(line.id);
+      const served = new Set<string>();
+      for (const p of svc.paths) {
+        const n = p.loop ? p.stations.length : p.stations.length - 1;
+        for (let k = 0; k < n; k++)
+          served.add(segmentKey(p.stations[k], p.stations[(k + 1) % p.stations.length]));
+        const dev = DEVIATIONS.find((d) => d.id === p.deviation);
+        if (dev && p.dir === 1) {
+          const edges = deviationSlow(this.net, dev).edges;
+          for (let k = 0; k < n; k++) {
+            if (edges.has(segmentKey(p.stations[k], p.stations[k + 1])))
+              this.deviated.push({ path: p, k });
+          }
+        }
+      }
+      for (const p of line.paths) {
+        if (p.dir !== 1) continue;
+        const n = p.loop ? p.stations.length : p.stations.length - 1;
+        for (let k = 0; k < n; k++) {
+          if (!served.has(segmentKey(p.stations[k], p.stations[(k + 1) % p.stations.length]))) {
+            this.unserved.push({ path: p, k });
+          }
+        }
+      }
+    }
+    for (let s = 0; s < this.sx.length; s++) {
+      const lines = sim.stationState(s).provisional;
+      if (lines.length) {
+        this.provisional.push({
+          station: s,
+          colors: lines.map((id) => this.net.lines.find((l) => l.id === id)!.display),
+        });
+      }
+    }
+  }
+
+  /** Les imprévus sur la carte : stations bloquées ou évacuées, courant coupé, voiture sur la voie. */
+  private paintIncidents(sim: Sim): void {
+    const ctx = this.ctx;
+    const u = this.unit;
+    const obs = sim.obstructions;
+    const pulse = 0.6 + 0.4 * Math.sin(this.clock * 5);
+    for (const s of obs.stations) {
+      const x = this.sx[s];
+      const y = this.sy[s];
+      const r = 11 * u;
+      if (obs.frozen.has(s)) {
+        this.badge(x + 8 * u, y - 8 * u, '⚡', '#ffd23f');
+        continue;
+      }
+      ctx.strokeStyle = obs.closed.has(s)
+        ? `rgba(255, 77, 94, ${pulse})`
+        : `rgba(255, 170, 60, ${pulse})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      if (obs.closed.has(s)) {
+        ctx.beginPath();
+        ctx.moveTo(x - r * 0.55, y - r * 0.55);
+        ctx.lineTo(x + r * 0.55, y + r * 0.55);
+        ctx.moveTo(x + r * 0.55, y - r * 0.55);
+        ctx.lineTo(x - r * 0.55, y + r * 0.55);
+        ctx.stroke();
+      } else {
+        this.badge(x + 9 * u, y - 9 * u, '!', '#ffaa3c');
+      }
+    }
+    for (const key of obs.edges) {
+      const [a, b] = key.split('-').map(Number);
+      const x = (this.sx[a] + this.sx[b]) / 2;
+      const y = (this.sy[a] + this.sy[b]) / 2;
+      // Une petite voiture rouge en travers de la voie.
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.atan2(this.sy[b] - this.sy[a], this.sx[b] - this.sx[a]) + Math.PI / 2);
+      ctx.fillStyle = `rgba(255, 77, 94, ${0.25 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, 10 * u, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff4d5e';
+      roundRect(ctx, -5 * u, -2.6 * u, 10 * u, 5.2 * u, 1.6 * u);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-2.2 * u, -1.6 * u, 4.4 * u, 1.4 * u);
+      ctx.fillStyle = NIGHT_INK;
+      for (const wx of [-3 * u, 3 * u]) {
+        ctx.beginPath();
+        ctx.arc(wx, 2.8 * u, 1.2 * u, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
   }
 
-  private paintBlocked(sim: Sim): void {
+  /** Le cortège : un essaim de manifestants qui avance le long de son parcours, de la queue à la tête. */
+  private paintCortege(sim: Sim): void {
+    const engine = sim.incidents instanceof IncidentEngine ? sim.incidents : null;
+    if (!engine) return;
     const ctx = this.ctx;
-    for (const s of sim.blocked) {
-      const r = 11 * this.unit;
-      const a = 0.6 + 0.4 * Math.sin(this.clock * 5);
-      ctx.strokeStyle = `rgba(255, 77, 94, ${a})`;
-      ctx.lineWidth = 2.2;
+    const u = this.unit;
+    for (const inc of engine.active) {
+      if (inc.spec.kind !== 'cortege') continue;
+      const route = inc.spec.stations;
+      const arc = engine.arc(inc.spec.id);
+      const total = arc[arc.length - 1];
+      const at = (m: number) => {
+        const d = Math.max(0, Math.min(total, m));
+        let i = 0;
+        while (i + 2 < arc.length && arc[i + 1] < d) i++;
+        const f = (d - arc[i]) / Math.max(1, arc[i + 1] - arc[i]);
+        const a = route[i];
+        const b = route[i + 1];
+        return {
+          x: this.sx[a] + (this.sx[b] - this.sx[a]) * f,
+          y: this.sy[a] + (this.sy[b] - this.sy[a]) * f,
+          nx: -(this.sy[b] - this.sy[a]),
+          ny: this.sx[b] - this.sx[a],
+        };
+      };
+      const head = Math.min(inc.head, total);
+      const tail = Math.max(0, inc.tail);
+      if (head <= tail) continue;
+      const count = 140;
+      ctx.fillStyle = 'rgba(255, 143, 200, 0.9)';
       ctx.beginPath();
-      ctx.arc(this.sx[s], this.sy[s], r, 0, Math.PI * 2);
-      ctx.moveTo(this.sx[s] - r * 0.6, this.sy[s] - r * 0.6);
-      ctx.lineTo(this.sx[s] + r * 0.6, this.sy[s] + r * 0.6);
-      ctx.moveTo(this.sx[s] + r * 0.6, this.sy[s] - r * 0.6);
-      ctx.lineTo(this.sx[s] - r * 0.6, this.sy[s] + r * 0.6);
-      ctx.stroke();
+      for (let i = 0; i < count; i++) {
+        const seed = Math.sin(i * 12.9898) * 43758.5453;
+        const r1 = seed - Math.floor(seed);
+        const r2 = Math.sin(i * 78.233) * 0.5 + 0.5;
+        const p = at(tail + (head - tail) * r1);
+        const len = Math.hypot(p.nx, p.ny) || 1;
+        const spread = (r2 - 0.5) * 9 * u + Math.sin(this.clock * 3 + i) * 0.8 * u;
+        const x = p.x + (p.nx / len) * spread;
+        const y = p.y + (p.ny / len) * spread;
+        ctx.moveTo(x + 1.6 * u, y);
+        ctx.arc(x, y, 1.6 * u, 0, Math.PI * 2);
+      }
+      ctx.fill();
+      const front = at(head);
+      this.badge(front.x, front.y - 12 * u, '✊', '#ff8fc8');
     }
+  }
+
+  /** Pluie : de fines traînées en biais, discrètes (le ton reste sobre). */
+  private paintRain(): void {
+    const ctx = this.ctx;
+    const v = this.view;
+    ctx.strokeStyle = 'rgba(146, 217, 255, 0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < 140; i++) {
+      const rx = Math.sin(i * 91.7) * 0.5 + 0.5;
+      const ry = Math.sin(i * 37.3) * 0.5 + 0.5;
+      const x = v.x + ((rx * v.w + this.clock * 40) % v.w);
+      const y = v.y + ((ry * v.h + this.clock * 160) % v.h);
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 4, y + 12);
+    }
+    ctx.stroke();
+  }
+
+  /** Une pastille ronde avec un signe (incident). */
+  private badge(x: number, y: number, glyph: string, color: string): void {
+    const ctx = this.ctx;
+    const r = 6 * this.unit;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = NIGHT_INK;
+    ctx.font = `800 ${Math.round(r * 1.5)}px Lato, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(glyph, x, y + 0.5);
   }
 
   private paintPings(dt: number): void {

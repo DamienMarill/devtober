@@ -3,28 +3,77 @@ import { Component, computed, input, output } from '@angular/core';
 import { CONFIG } from './config';
 import { Report, clock } from './score';
 
-/** Le bilan de fin de service : la note, le titre, les chiffres et la journée heure par heure. */
+/**
+ * Le bilan de fin de service : la note face au fantôme, le titre, les chiffres, chaque imprévu (tes pertes contre
+ * les siennes) et la journée heure par heure.
+ */
 @Component({
   selector: 'app-swarm-report',
   imports: [DecimalPipe],
   host: { class: 'block' },
   template: `
     @let r = report();
-    <p class="text-sky font-display text-sm font-semibold">Fin de service · 0 h 30</p>
+    <p class="text-sky font-display text-sm font-semibold">
+      Fin de service · 0 h 30
+      @if (seed() !== null) {
+        <span class="text-muted-foreground font-normal">· journée n° {{ seed() }}</span>
+      }
+    </p>
     <p class="note font-display">
       {{ r.note | number: '1.0-1' }}<span class="text-muted-foreground">/20</span>
     </p>
     <p class="title">{{ r.title }}</p>
 
+    <p class="versus">
+      <span
+        >Toi <b>{{ r.points | number }}</b> pts</span
+      >
+      <span class="text-muted-foreground">·</span>
+      <span
+        >Fantôme <b>{{ r.ghostPoints | number }}</b> pts</span
+      >
+      <span [class.good]="r.points >= r.ghostPoints" [class.bad]="r.points < r.ghostPoints">
+        ({{ r.points - r.ghostPoints > 0 ? '+' : '' }}{{ r.points - r.ghostPoints | number }})
+      </span>
+    </p>
+
+    @if (r.incidents.length) {
+      <table class="incidents">
+        <caption>
+          Pertes pendant chaque imprévu, sur tout le réseau (abandons ×3 + retards)
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Imprévu</th>
+            <th scope="col">Toi</th>
+            <th scope="col">Fantôme</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (i of r.incidents; track $index) {
+            <tr>
+              <th scope="row">
+                <span class="text-muted-foreground font-mono">{{ at(i.at) }}</span> {{ i.title }}
+              </th>
+              <td [class.good]="i.player <= i.ghost" [class.bad]="i.player > i.ghost">
+                {{ i.player | number }}
+              </td>
+              <td>{{ i.ghost | number }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
     <dl class="stats">
       <div>
-        <dt>Voyageurs servis</dt>
+        <dt>Arrivés en tram</dt>
         <dd>
           {{ r.served | number }} <small>({{ r.share * 100 | number: '1.0-1' }} %)</small>
         </dd>
       </div>
       <div>
-        <dt>Partis à pied</dt>
+        <dt>Abandons</dt>
         <dd>{{ r.lost | number }}</dd>
       </div>
       <div>
@@ -37,17 +86,11 @@ import { Report, clock } from './score';
       </div>
       <div>
         <dt>Pic de foule</dt>
-        <dd>{{ r.peak.count | number }} à {{ r.peak.station }}, {{ peakAt() }}</dd>
+        <dd>{{ r.peak.count | number }} à {{ r.peak.station }}, {{ at(r.peak.at) }}</dd>
       </div>
       <div>
-        <dt>Pilote automatique</dt>
-        <dd>
-          @if (benchmark(); as b) {
-            {{ b | number: '1.0-1' }}/20
-          } @else {
-            calcul…
-          }
-        </dd>
+        <dt>Arrivés à pied</dt>
+        <dd>{{ r.walked | number }}</dd>
       </div>
     </dl>
 
@@ -81,7 +124,8 @@ import { Report, clock } from './score';
     <p class="axis"><span>6 h</span><span>12 h</span><span>18 h</span><span>0 h</span></p>
 
     <div class="actions">
-      <button type="button" class="primary" (click)="replay.emit()">Reprendre le service</button>
+      <button type="button" class="primary" (click)="replay.emit()">Nouvelle journée</button>
+      <button type="button" class="ghost" (click)="retry.emit()">Rejouer celle-ci</button>
       <button type="button" class="ghost" (click)="demo.emit()">Voir la démo</button>
     </div>
   `,
@@ -101,6 +145,50 @@ import { Report, clock } from './score';
       margin-top: 0.5rem;
       color: var(--card-foreground);
       text-wrap: pretty;
+    }
+    .versus {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.6rem;
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .versus b {
+      color: white;
+    }
+    .good {
+      color: #6ee7a8;
+    }
+    .bad {
+      color: #ffb3bb;
+    }
+    .incidents {
+      width: 100%;
+      margin-top: 0.9rem;
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      border-collapse: collapse;
+    }
+    .incidents caption {
+      text-align: left;
+      color: var(--muted-foreground);
+      margin-bottom: 0.25rem;
+    }
+    .incidents th,
+    .incidents td {
+      padding: 0.15rem 0.3rem;
+      text-align: right;
+      border-bottom: 1px solid rgb(255 255 255 / 0.06);
+    }
+    .incidents th[scope='row'],
+    .incidents thead th:first-child {
+      text-align: left;
+      font-weight: 400;
+    }
+    .incidents thead th {
+      color: var(--muted-foreground);
+      font-weight: 600;
     }
     .stats {
       display: grid;
@@ -157,12 +245,13 @@ import { Report, clock } from './score';
 })
 export class DayReport {
   readonly report = input.required<Report>();
-  /** La note du pilote automatique sur la même journée (null pendant le calcul). */
-  readonly benchmark = input<number | null>(null);
+  /** Numéro de la journée (la graine), pour la rejouer avec `?seed=`. */
+  readonly seed = input<number | null>(null);
   readonly replay = output<void>();
+  readonly retry = output<void>();
   readonly demo = output<void>();
 
-  protected readonly peakAt = computed(() => clock(this.report().peak.at));
+  protected at = clock;
 
   /** Barres de 6 h à 0 h, à l'échelle de l'heure la plus chargée (46 unités de haut). */
   protected readonly hours = computed(() => {
@@ -170,8 +259,9 @@ export class DayReport {
     const first = Math.floor(CONFIG.day.start / 60);
     const last = Math.floor(CONFIG.day.end / 60);
     const list = [];
-    for (let h = first; h <= last; h++)
+    for (let h = first; h <= last; h++) {
       list.push({ hour: h, served: r.servedByHour[h], lost: r.lostByHour[h] });
+    }
     const max = Math.max(1, ...list.map((h) => h.served + h.lost));
     return list.map((h) => ({
       hour: h.hour,

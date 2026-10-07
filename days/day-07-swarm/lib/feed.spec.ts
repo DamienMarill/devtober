@@ -56,6 +56,37 @@ describe('Feed', () => {
     feed.push({ kind: 'cancel', line: 1 }, 400.3);
     expect(feed.items).toHaveLength(0);
   });
+
+  it('raconte les changements du plan d’exploitation', () => {
+    const feed = new Feed(net);
+    const comedie = net.byId.get('comedie')!;
+    const text = (n: Parameters<Feed['push']>[0]) => feed.push(n, 600)!.text;
+    expect(text({ kind: 'plan', change: 'cut', station: comedie })).toMatch(
+      /^Comédie : circulation interrompue/,
+    );
+    expect(text({ kind: 'plan', change: 'cut-edge', station: corum, to: comedie })).toBe(
+      'Corum – Comédie : circulation interrompue sur ce tronçon.',
+    );
+    expect(
+      text({ kind: 'plan', change: 'deviation-on', deviation: 'l1-pompignane', line: 1 }),
+    ).toBe('L1 : itinéraire bis via Les Aubes et Pompignane.');
+  });
+
+  it('reste sobre pendant un incident sérieux', () => {
+    const feed = new Feed(net, () => 0);
+    const rain = {
+      kind: 'incident',
+      id: 'rain',
+      title: 'Pluie',
+      text: 'Fortes pluies.',
+      sober: true,
+    } as const;
+    feed.push({ ...rain, stage: 'start' }, 12 * 60);
+    const crowd = { kind: 'crowd', station: corum, count: CONFIG.crowd.saturated } as const;
+    expect(feed.push(crowd, 12 * 60 + 1)!.tone).toBe('alert');
+    feed.push({ ...rain, stage: 'end' }, 13 * 60);
+    expect(feed.push(crowd, 13 * 60 + 1)!.tone).toBe('joke');
+  });
 });
 
 describe('fill', () => {

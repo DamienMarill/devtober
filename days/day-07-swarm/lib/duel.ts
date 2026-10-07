@@ -72,6 +72,8 @@ export class Duel {
     this.stream.advance(this.player.time + dt, dt, this.spawns);
     this.player.step(dt, this.spawns);
     this.ghost.step(dt, this.spawns);
+    // Le fil du fantôme n'est lu par personne.
+    this.ghost.notices.length = 0;
     this.ghostClock += dt;
     if (this.ghostClock >= CONFIG.autopilot.every) {
       this.ghostClock = 0;

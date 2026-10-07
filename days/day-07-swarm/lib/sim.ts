@@ -112,6 +112,7 @@ export type Notice =
   | { kind: 'depot-empty' }
   | { kind: 'plan'; change: 'cut' | 'uncut' | 'skip' | 'unskip'; station: number }
   | { kind: 'plan'; change: 'deviation-on' | 'deviation-off'; deviation: string; line: number }
+  | { kind: 'plan'; change: 'cut-edge' | 'uncut-edge'; station: number; to: number }
   | {
       kind: 'order';
       stage: 'given' | 'done' | 'cancelled';
@@ -487,6 +488,7 @@ export class Sim {
 
   setCutEdge(a: number, b: number, on: boolean): CommandResult {
     if (!this.plan.setCutEdge(a, b, on)) return { ok: false, reason: 'Déjà dans cet état' };
+    this.notices.push({ kind: 'plan', change: on ? 'cut-edge' : 'uncut-edge', station: a, to: b });
     return { ok: true };
   }
 

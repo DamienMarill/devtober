@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clock, noteFor, titleFor } from './score';
-
-describe('noteFor', () => {
-  it('va de 0 à 20 au demi-point', () => {
-    expect(noteFor(0.5)).toBe(0);
-    expect(noteFor(1)).toBe(20);
-    expect(noteFor(0.9) * 2).toBe(Math.round(noteFor(0.9) * 2));
-    expect(noteFor(0.9)).toBeGreaterThan(noteFor(0.85));
-  });
-});
+import { clock, titleFor } from './score';
 
 describe('titleFor', () => {
   it('change de ton selon la note', () => {

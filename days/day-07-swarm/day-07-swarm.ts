@@ -6,27 +6,37 @@ import {
   DestroyRef,
   ElementRef,
   inject,
+  Injector,
   signal,
   viewChild,
 } from '@angular/core';
 import { Bell } from './lib/audio';
-import { autopilot } from './lib/autopilot';
+import { Bot, responder } from './lib/bots';
 import { CONFIG } from './lib/config';
 import { DayReport } from './lib/day-report';
 import { Demand } from './lib/demand';
+import { DEVIATIONS } from './lib/deviations';
+import { Duel } from './lib/duel';
 import { Feed, FeedItem } from './lib/feed';
 import { FleetPanel, LineRow } from './lib/fleet-panel';
+import { ActiveIncident, IncidentEngine, IncidentKind, drawDay } from './lib/incidents';
 import { buildNetwork } from './lib/network';
 import { parseOptions } from './lib/options';
 import { Renderer } from './lib/render';
-import { computeRoutes } from './lib/routing';
-import { WEDNESDAY } from './lib/scenario';
 import { Report, clock, makeReport } from './lib/score';
-import { Sim } from './lib/sim';
+import { Sim, Tram, TramOrderKind } from './lib/sim';
 import { Swarm } from './lib/swarm';
 
-/** intro : l'écran d'accueil (la démo tourne derrière) · play : le joueur régule · demo : touche T · report : bilan. */
+/** intro : briefing (la démo tourne derrière) · play : le joueur régule · demo : touche T · report : bilan. */
 type Mode = 'intro' | 'play' | 'demo' | 'report';
+
+interface IncidentChip {
+  id: string;
+  glyph: string;
+  title: string;
+  place: string;
+  station: number | null;
+}
 
 interface Hud {
   time: number;
@@ -35,7 +45,9 @@ interface Hud {
   incoming: number;
   served: number;
   lost: number;
-  share: number;
+  points: number;
+  ghost: number;
+  incidents: IncidentChip[];
 }
 
 interface HoverInfo {
@@ -44,18 +56,89 @@ interface HoverInfo {
   name: string;
   lines: { id: number; color: string; text: string; waiting: number; wait: number }[];
   lost: number;
+  hint: string | null;
 }
 
-/** Le réseau et ses itinéraires ne changent jamais : calculés une fois, au premier affichage du jour. */
-const NET = buildNetwork();
-const ROUTES = computeRoutes(NET);
-const DEMAND = new Demand(NET);
+type Target = { kind: 'station'; id: number } | { kind: 'tram'; id: number };
 
-/** La démo (touche T) : de 16 h 50 à ~20 h 50 à ×2, avec le colis suspect de 17 h 40 au bout de 6 s. */
-const DEMO = { start: 16 * 60 + 50, speed: 1 };
-/** L'écran d'accueil : la pointe du matin, au pilote automatique. */
-const ATTRACT = { start: 7 * 60 + 25, speed: 0 };
+interface PopAction {
+  key: string;
+  label: string;
+  hint: string;
+  on: boolean;
+  /** La raison d'un refus (le bouton est alors grisé). */
+  disabled: string | null;
+}
+
+/** Le popover d'une station ou d'une rame, recalculé ~10 fois par seconde tant qu'il est ouvert. */
+interface Pop {
+  kind: 'station' | 'tram';
+  title: string;
+  sub: string;
+  lines: { id: number; color: string; text: string }[];
+  status: { text: string; tone: 'alert' | 'info' }[];
+  actions: PopAction[];
+}
+
+/** Le réseau ne change jamais : construit une fois, au premier affichage du jour. */
+const NET = buildNetwork();
+const DEMAND = new Demand(NET);
+const NAME = (s: number) => NET.stations[s].name;
+const LINE = (id: number) => NET.lines.find((l) => l.id === id)!;
+
+/** Voisins physiques de chaque station (pour couper un tronçon depuis le popover). */
+const NEIGHBOURS: number[][] = NET.stations.map(() => []);
+for (const key of NET.hops.keys()) {
+  const [a, b] = key.split('-').map(Number);
+  if (!NEIGHBOURS[a].includes(b)) NEIGHBOURS[a].push(b);
+  if (!NEIGHBOURS[b].includes(a)) NEIGHBOURS[b].push(a);
+}
+
+/**
+ * La démo (touche T) : la journée n° 12, de 15 h 35 à ~19 h 35 à ×2. Une manif part de la Comédie à 15 h 47 et
+ * une voiture bloque la 1 vers Château d'Ô à 16 h 03 ; le régulateur automatique dévie la 1 par Pompignane et
+ * coupe le tronçon.
+ */
+const DEMO = { seed: 12, start: 15 * 60 + 35, speed: 1 };
+/** Derrière le briefing : la pointe du matin, même journée. */
+const ATTRACT = { seed: 12, start: 7 * 60 + 25, speed: 0 };
 const SPEED_LABELS = ['×1', '×2', '×4'];
+
+const GLYPHS: Record<IncidentKind, string> = {
+  car: '🚗',
+  scooter: '🛴',
+  illness: '✚',
+  breakdown: '🔧',
+  power: '⚡',
+  package: '📦',
+  cortege: '✊',
+  rain: '🌧',
+  strike: '✋',
+};
+
+const ORDERS: Record<TramOrderKind, { label: string; hint: (at: string) => string }> = {
+  hold: { label: 'Retenir 2 min', hint: (at) => `à ${at}` },
+  turnBack: { label: 'Demi-tour', hint: (at) => `à ${at}, tout le monde descend` },
+  deadhead: { label: 'Haut-le-pied', hint: (at) => `à vide après ${at}, sans arrêt` },
+  deviate: { label: 'Dévier via Pompignane', hint: () => 'cette course seulement' },
+  depot: { label: 'Rentrer au dépôt', hint: (at) => `après ${at}` },
+};
+
+/** Les stations d'où l'on peut basculer un itinéraire bis : le tronçon évité, ses deux bouts et le détour. */
+const DEVIATION_AT = DEVIATIONS.map((dev) => {
+  const ids = LINE(dev.line).paths[0].stations;
+  const a = ids.indexOf(NET.byId.get(dev.from)!);
+  const b = ids.indexOf(NET.byId.get(dev.to)!);
+  const via = dev.via.map((id) => NET.byId.get(id)!);
+  return { dev, stations: new Set([...ids.slice(Math.min(a, b), Math.max(a, b) + 1), ...via]) };
+});
+
+const randomSeed = () => 1000 + Math.floor(Math.random() * 9000);
+const hhmm = (m: number) =>
+  `${Math.floor(m / 60) % 24} h ${String(Math.floor(m % 60)).padStart(2, '0')}`;
+/** Durée restante arrondie aux 5 minutes : le PC n'a qu'une estimation. */
+const eta = (minutes: number) =>
+  minutes <= 2 ? 'fin imminente' : `fin estimée dans ~${Math.ceil(minutes / 5) * 5} min`;
 
 @Component({
   selector: 'app-day-07-swarm',
@@ -70,11 +153,12 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
     <canvas
       #canvas
       class="absolute inset-0 size-full touch-none"
-      aria-label="Carte des 5 lignes de tram de Montpellier : rames et voyageurs à quai"
+      [style.cursor]="cursor()"
+      aria-label="Carte des 5 lignes de tram de Montpellier : rames, voyageurs à quai et imprévus"
       role="img"
-      (pointermove)="onPointer($event)"
-      (pointerdown)="onPointer($event)"
-      (pointerleave)="hover.set(null)"
+      (pointermove)="onPointerMove($event)"
+      (pointerdown)="onPointerDown($event)"
+      (pointerleave)="clearHover()"
     ></canvas>
 
     <section #panel class="hud" aria-label="Poste de commande">
@@ -82,7 +166,7 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
         <div class="clock-block">
           <p class="kicker text-sky font-display">PC tram · Montpellier</p>
           <p class="clock" aria-live="off">{{ clockText() }}</p>
-          <p class="day text-muted-foreground">{{ dayLabel }}</p>
+          <p class="day text-muted-foreground">{{ dayLabel }} · n° {{ seed() }}</p>
         </div>
         <div class="controls">
           <button
@@ -119,6 +203,7 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
             class="ctl wide"
             [class.on]="auto()"
             [attr.aria-pressed]="auto()"
+            title="Le pilote automatique répartit les rames entre les lignes ; les imprévus restent pour toi"
             (click)="toggleAuto()"
           >
             Pilote auto
@@ -152,17 +237,40 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
             </svg>
           </button>
         </div>
-        <div class="served" [title]="'Part des voyageurs arrivés à destination'">
-          <p class="share">
-            {{ hud().share * 100 | number: '1.0-0' }}<small>%</small>
-            <span class="text-muted-foreground">servis</span>
+        <div
+          class="score"
+          title="+1 par voyageur arrivé, −3 par voyageur parti à pied, −1 par voyageur qui a attendu plus de 10 min. Le fantôme joue la même journée au pilote automatique."
+        >
+          <p class="pts">{{ hud().points | number }}<small> pts</small></p>
+          <p class="vs" [class.good]="delta() >= 0" [class.bad]="delta() < 0">
+            {{ delta() > 0 ? '+' : '' }}{{ delta() | number }}
+            <span class="text-muted-foreground">sur le fantôme</span>
           </p>
           <p class="counts text-muted-foreground">
-            {{ hud().served | number }} à bon port ·
-            <span class="lost">{{ hud().lost | number }}</span> à pied
+            {{ hud().served | number }} arrivés ·
+            <span class="lost">{{ hud().lost | number }}</span> abandons
           </p>
         </div>
       </header>
+
+      @if (hud().incidents.length) {
+        <ul class="live" aria-label="Imprévus en cours">
+          @for (c of hud().incidents; track c.id) {
+            <li>
+              <button
+                type="button"
+                [disabled]="c.station === null"
+                [attr.aria-label]="c.title + ', ' + c.place"
+                (click)="focusIncident(c)"
+              >
+                <span class="glyph" aria-hidden="true">{{ c.glyph }}</span>
+                <b>{{ c.title }}</b>
+                <span class="place">{{ c.place }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
 
       <app-swarm-fleet
         [rows]="hud().rows"
@@ -170,6 +278,7 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
         (pick)="select($event)"
         (add)="addRame($event)"
         (remove)="removeRame($event)"
+        (deviate)="toggleDeviation($event)"
       />
 
       <p class="depot text-muted-foreground">
@@ -190,35 +299,95 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       </ol>
 
       <p class="keys text-muted-foreground">
-        <kbd>1</kbd>–<kbd>5</kbd> ligne · <kbd>↑</kbd> <kbd>↓</kbd> une rame de plus ou de moins ·
-        <kbd>Espace</kbd> pause · <kbd>F</kbd> vitesse · <kbd>A</kbd> pilote auto · <kbd>M</kbd> son
-        · <kbd>T</kbd> démo · <kbd>R</kbd> recommencer
+        Clic sur une station ou une rame : agir · <kbd>1</kbd>–<kbd>5</kbd> ligne · <kbd>↑</kbd>
+        <kbd>↓</kbd> une rame de plus ou de moins · <kbd>Espace</kbd> pause · <kbd>F</kbd> vitesse ·
+        <kbd>A</kbd> pilote auto · <kbd>M</kbd> son · <kbd>T</kbd> démo · <kbd>R</kbd> recommencer
       </p>
     </section>
 
     @if (hoverInfo(); as h) {
-      <div class="tip" [style.left.px]="h.x" [style.top.px]="h.y" aria-hidden="true">
-        <p class="font-semibold text-white">{{ h.name }}</p>
-        @for (l of h.lines; track l.id) {
-          <p class="tip-line">
+      @if (!pop()) {
+        <div class="tip" [style.left.px]="h.x" [style.top.px]="h.y" aria-hidden="true">
+          <p class="font-semibold text-white">{{ h.name }}</p>
+          @for (l of h.lines; track l.id) {
+            <p class="tip-line">
+              <span class="badge" [style.background]="l.color" [style.color]="l.text">{{
+                l.id
+              }}</span>
+              {{ l.waiting | number }} à quai
+              @if (l.waiting) {
+                · {{ l.wait | number: '1.0-0' }} min
+              }
+            </p>
+          }
+          @if (h.lost) {
+            <p class="text-[#ffb3bb]">{{ h.lost | number }} partis à pied</p>
+          }
+          @if (h.hint) {
+            <p class="tip-hint">{{ h.hint }}</p>
+          }
+        </div>
+      }
+    }
+
+    @if (pop(); as p) {
+      <div
+        #pop
+        class="pop"
+        role="dialog"
+        [attr.aria-label]="p.title"
+        [style.left.px]="popPos().left"
+        [style.top.px]="popPos().top"
+      >
+        <header class="pop-head">
+          @for (l of p.lines; track l.id) {
             <span class="badge" [style.background]="l.color" [style.color]="l.text">{{
               l.id
             }}</span>
-            {{ l.waiting | number }} à quai
-            @if (l.waiting) {
-              · {{ l.wait | number: '1.0-0' }} min
-            }
-          </p>
+          }
+          <p class="pop-title">{{ p.title }}</p>
+          <button type="button" class="close" aria-label="Fermer" (click)="closePop()">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M4 4l8 8m0-8l-8 8"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </header>
+        @if (p.sub) {
+          <p class="pop-sub text-muted-foreground">{{ p.sub }}</p>
         }
-        @if (h.lost) {
-          <p class="text-[#ffb3bb]">{{ h.lost | number }} partis à pied</p>
+        @for (s of p.status; track $index) {
+          <p class="pop-status" [attr.data-tone]="s.tone">{{ s.text }}</p>
+        }
+        <div class="pop-actions">
+          @for (a of p.actions; track a.key) {
+            <button
+              type="button"
+              [class.on]="a.on"
+              [disabled]="a.disabled !== null"
+              [attr.aria-pressed]="p.kind === 'station' ? a.on : null"
+              (click)="act(a.key)"
+            >
+              <span>{{ a.label }}</span>
+              @if (a.disabled ?? a.hint; as hint) {
+                <small>{{ hint }}</small>
+              }
+            </button>
+          }
+        </div>
+        @if (p.kind === 'tram') {
+          <p class="pop-foot text-muted-foreground">En pause le temps de choisir · Échap</p>
         }
       </div>
     }
 
     @if (mode() === 'demo') {
       <p class="demo-badge">
-        Démo · pilote automatique
+        Démo · régulateur automatique
         <button type="button" (click)="startPlay()">Prendre le service</button>
       </p>
     }
@@ -227,23 +396,39 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       <section class="overlay" aria-labelledby="swarm-intro-title">
         <div class="card">
           <p class="text-sky font-display text-sm font-semibold">
-            PC tram · Montpellier · {{ dayLabel }}
+            PC tram · Montpellier · {{ dayLabel }} · journée n° {{ nextSeed() }}
           </p>
           <h1 id="swarm-intro-title" class="font-display">Heure de pointe</h1>
           <p>
-            Tu prends le poste de régulation des 5 lignes de tram de Montpellier. Le réseau est
-            gratuit pour les habitants de la Métropole, et ça se voit sur les quais.
+            Tu prends le poste de régulation des 5 lignes de tram de Montpellier, de 6 h à 0 h 30.
+            Le réseau est gratuit pour les habitants de la Métropole, et ça se voit sur les quais.
           </p>
-          <p>
-            À 6 h, {{ startTrams }} rames roulent ; {{ startDepot }} attendent au dépôt.
-            Répartis-les entre les lignes : renforce celles où la foule s'accumule, allège celles
-            qui roulent à vide. Une rame sortie du dépôt met {{ deployDelay }} minutes à rejoindre
-            son terminus, une rame retirée finit d'abord sa course : guette les annonces du fil pour
-            anticiper.
-          </p>
+          <h2>Au programme</h2>
+          <ul class="brief">
+            @for (b of briefing(); track $index) {
+              <li>{{ b }}</li>
+            }
+          </ul>
+          <h2>Tes outils</h2>
+          <ul class="brief">
+            <li>
+              <b>Le panneau des lignes</b> : sortir des rames du dépôt ou en rentrer, et
+              l’itinéraire bis de la 1 par Les Aubes et Pompignane (aussi depuis Corum ou la
+              Comédie).
+            </li>
+            <li>
+              <b>Une station</b> : ne plus la desservir, y interrompre la circulation (les lignes
+              sont coupées en tronçons), couper un tronçon bloqué.
+            </li>
+            <li>
+              <b>Une rame</b> (le jeu se met en pause) : la retenir, lui faire faire demi-tour,
+              l’envoyer haut-le-pied ou au dépôt.
+            </li>
+          </ul>
           <p class="text-muted-foreground text-sm">
-            Un point = 10 voyageurs, de la couleur de la ligne qu'ils attendent. Au bout de 20
-            minutes environ, ils abandonnent et finissent à pied.
+            +1 point par voyageur arrivé, −3 par voyageur parti à pied, −1 au-delà de 10 minutes
+            d’attente. Un fantôme joue la même journée, mêmes voyageurs, mêmes imprévus, au pilote
+            automatique : fais mieux que lui. Un point sur la carte = 10 voyageurs.
           </p>
           <div class="actions">
             <button type="button" class="primary" (click)="startPlay()">Prendre le service</button>
@@ -253,8 +438,8 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
           </div>
           <p class="source text-muted-foreground">
             Stations, couleurs, temps de parcours et rames en ligne : GTFS de la TaM, horaires réels
-            du
-            {{ gtfsDay }}. Les événements de la journée sont inventés.
+            du {{ gtfsDay }}. Déviation de la 1 et coupures en tronçons : comme la TaM les jours de
+            manif ou de travaux. Les imprévus sont tirés au hasard.
           </p>
         </div>
       </section>
@@ -265,8 +450,9 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
         <div class="card">
           <app-swarm-report
             [report]="r"
-            [benchmark]="benchmark()"
-            (replay)="startPlay()"
+            [seed]="seed()"
+            (replay)="newDay()"
+            (retry)="startPlay(seed())"
             (demo)="startDemo()"
           />
         </div>
@@ -301,7 +487,8 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
     .kicker,
     .day,
     .keys,
-    .legend {
+    .legend,
+    .counts {
       display: none;
     }
     .clock {
@@ -339,32 +526,79 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       border-color: transparent;
       color: white;
     }
-    .served {
+    .score {
       margin-left: auto;
       text-align: right;
+      font-variant-numeric: tabular-nums;
     }
-    .share {
+    .pts {
       font-family: var(--font-display);
       font-size: 1.35rem;
       font-weight: 800;
       line-height: 1;
       color: white;
     }
-    .share small {
-      font-size: 0.8rem;
-    }
-    .share span {
+    .pts small {
       font-family: var(--font-sans);
       font-size: 0.75rem;
       font-weight: 400;
-      margin-left: 0.2rem;
+      color: var(--muted-foreground);
+    }
+    .vs {
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .vs span {
+      font-weight: 400;
+    }
+    .good {
+      color: #6ee7a8;
+    }
+    .bad {
+      color: #ffb3bb;
     }
     .counts {
       font-size: 0.68rem;
-      font-variant-numeric: tabular-nums;
     }
     .lost {
       color: #ffb3bb;
+    }
+    .live {
+      display: flex;
+      gap: 0.35rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .live li {
+      min-width: 0;
+      max-width: 100%;
+      flex-shrink: 0;
+    }
+    .live button {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      max-width: 100%;
+      white-space: nowrap;
+      padding: 0.2rem 0.55rem 0.2rem 0.4rem;
+      border-radius: 9999px;
+      border: 1px solid rgb(255 77 94 / 0.45);
+      background: rgb(255 77 94 / 0.12);
+      color: var(--card-foreground);
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .live button:disabled {
+      cursor: default;
+    }
+    .live b {
+      color: white;
+    }
+    .live .place {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--muted-foreground);
     }
     .depot {
       font-size: 0.75rem;
@@ -424,7 +658,7 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       }
       .kicker,
       .day,
-      .legend {
+      .counts {
         display: block;
       }
       .legend {
@@ -442,8 +676,12 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       .clock {
         font-size: 2.6rem;
       }
-      .share {
+      .pts {
         font-size: 1.8rem;
+      }
+      .live {
+        flex-wrap: wrap;
+        overflow: visible;
       }
       .feed {
         display: grid;
@@ -485,15 +723,115 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       gap: 0.35rem;
       font-variant-numeric: tabular-nums;
     }
+    .tip-hint {
+      margin-top: 0.15rem;
+      color: var(--muted-foreground);
+      font-size: 0.68rem;
+    }
     .badge {
       display: inline-grid;
       place-items: center;
+      flex-shrink: 0;
       width: 1.05rem;
       height: 1.05rem;
       border-radius: 0.25rem;
       font-size: 0.65rem;
       font-weight: 800;
     }
+
+    .pop {
+      position: absolute;
+      z-index: 25;
+      width: min(17.5rem, calc(100% - 16px));
+      padding: 0.6rem 0.65rem 0.65rem;
+      border-radius: 0.7rem;
+      border: 1px solid rgb(255 255 255 / 0.16);
+      background: rgb(14 10 53 / 0.97);
+      box-shadow: 0 14px 40px rgb(0 0 0 / 0.5);
+      color: var(--card-foreground);
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+    .pop-head {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .pop-title {
+      flex: 1;
+      min-width: 0;
+      margin-left: 0.15rem;
+      color: white;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .close {
+      display: grid;
+      place-items: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 0.4rem;
+      color: rgb(255 255 255 / 0.7);
+      cursor: pointer;
+    }
+    .close:hover {
+      background: rgb(255 255 255 / 0.08);
+    }
+    .close svg {
+      width: 0.85rem;
+      height: 0.85rem;
+    }
+    .pop-sub {
+      margin-top: 0.15rem;
+    }
+    .pop-status {
+      margin-top: 0.3rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 0.35rem;
+      background: rgb(146 217 255 / 0.1);
+      color: var(--color-sky);
+    }
+    .pop-status[data-tone='alert'] {
+      background: rgb(255 77 94 / 0.13);
+      color: #ffc7a8;
+    }
+    .pop-actions {
+      display: grid;
+      gap: 0.3rem;
+      margin-top: 0.5rem;
+    }
+    .pop-actions button {
+      display: grid;
+      text-align: left;
+      padding: 0.35rem 0.55rem;
+      border-radius: 0.45rem;
+      border: 1px solid rgb(255 255 255 / 0.14);
+      background: rgb(255 255 255 / 0.05);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .pop-actions button:hover:not(:disabled) {
+      border-color: rgb(255 255 255 / 0.35);
+    }
+    .pop-actions button.on {
+      border-color: transparent;
+      background: var(--primary);
+    }
+    .pop-actions button:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+    .pop-actions small {
+      font-weight: 400;
+      font-size: 0.7rem;
+      color: rgb(255 255 255 / 0.65);
+    }
+    .pop-foot {
+      margin-top: 0.45rem;
+      font-size: 0.68rem;
+    }
+
     .demo-badge {
       position: absolute;
       top: 0.7rem;
@@ -528,7 +866,7 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       overflow-y: auto;
     }
     .card {
-      width: min(31rem, 100%);
+      width: min(33rem, 100%);
       padding: 1.4rem 1.5rem;
       border-radius: 1rem;
       border: 1px solid rgb(255 255 255 / 0.12);
@@ -536,8 +874,8 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       backdrop-filter: blur(10px);
       box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
       color: var(--card-foreground);
-      font-size: 0.92rem;
-      line-height: 1.55;
+      font-size: 0.9rem;
+      line-height: 1.5;
     }
     .card h1 {
       margin: 0.15rem 0 0.6rem;
@@ -546,8 +884,30 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
       font-weight: 800;
       color: white;
     }
+    .card h2 {
+      margin-top: 0.8rem;
+      font-family: var(--font-display);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--color-sky);
+    }
     .card p + p {
       margin-top: 0.6rem;
+    }
+    .brief {
+      margin-top: 0.25rem;
+      display: grid;
+      gap: 0.2rem;
+      padding-left: 1.1rem;
+      list-style: disc;
+    }
+    .brief b {
+      color: white;
+    }
+    .brief + p {
+      margin-top: 0.7rem;
     }
     .actions {
       display: flex;
@@ -602,18 +962,14 @@ const SPEED_LABELS = ['×1', '×2', '×4'];
 export default class Day07Swarm {
   private readonly canvasRef = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private readonly hudRef = viewChild.required<ElementRef<HTMLElement>>('panel');
+  private readonly popRef = viewChild<ElementRef<HTMLElement>>('pop');
   private readonly host: HTMLElement = inject(ElementRef).nativeElement;
+  private readonly injector = inject(Injector);
   protected readonly options = parseOptions(location.search);
 
   protected readonly dayLabel = CONFIG.day.label;
   protected readonly speedLabels = SPEED_LABELS;
-  protected readonly deployDelay = CONFIG.depot.deploy;
   protected readonly gtfsDay = '7 octobre 2026';
-  protected readonly startTrams = NET.lines.reduce(
-    (s, l) => s + l.fleet[Math.floor(CONFIG.day.start / 60)],
-    0,
-  );
-  protected readonly startDepot = NET.lines.reduce((s, l) => s + l.fleet[8], 0) - this.startTrams;
 
   protected readonly mode = signal<Mode>('intro');
   protected readonly paused = signal(false);
@@ -621,7 +977,9 @@ export default class Day07Swarm {
   protected readonly auto = signal(true);
   protected readonly sound = signal(false);
   protected readonly selected = signal<number | null>(null);
-  protected readonly hover = signal<number | null>(null);
+  /** La journée affichée, et celle que le briefing annonce (la prochaine partie). */
+  protected readonly seed = signal(ATTRACT.seed);
+  protected readonly nextSeed = signal(this.options.seed ?? randomSeed());
   protected readonly hud = signal<Hud>({
     time: CONFIG.day.start,
     rows: [],
@@ -629,32 +987,45 @@ export default class Day07Swarm {
     incoming: 0,
     served: 0,
     lost: 0,
-    share: 1,
+    points: 0,
+    ghost: 0,
+    incidents: [],
   });
   protected readonly feed = signal<FeedItem[]>([]);
   protected readonly report = signal<Report | null>(null);
-  protected readonly benchmark = signal<number | null>(null);
   protected readonly hoverInfo = signal<HoverInfo | null>(null);
+  protected readonly pop = signal<Pop | null>(null);
+  protected readonly popPos = signal({ left: 0, top: 0 });
+  protected readonly cursor = signal('default');
   protected readonly debugLine = signal('');
   protected readonly clockText = computed(() => clock(this.hud().time));
+  protected readonly delta = computed(() => this.hud().points - this.hud().ghost);
+  protected readonly briefing = computed(() => briefingOf(this.nextSeed()));
 
-  private sim!: Sim;
+  private duel!: Duel;
+  private bot: Bot | null = null;
   private feedLog!: Feed;
   private renderer: Renderer | null = null;
   private swarm: Swarm | null = null;
   private readonly bell = new Bell();
+  private hover: number | null = null;
+  private target: Target | null = null;
+  /** Le popover d'une rame a mis le jeu en pause (on reprend en le fermant). */
+  private popPaused = false;
   private frame = 0;
   private last = 0;
   private acc = 0;
-  private autoClock = 0;
+  private botClock = 0;
   private hudClock = 0;
-  private benchTimer = 0;
+
+  private get sim(): Sim {
+    return this.duel.player;
+  }
 
   constructor() {
     const destroyRef = inject(DestroyRef);
     destroyRef.onDestroy(() => {
       cancelAnimationFrame(this.frame);
-      clearTimeout(this.benchTimer);
       this.bell.dispose();
     });
 
@@ -669,7 +1040,10 @@ export default class Day07Swarm {
       observer.observe(this.hudRef().nativeElement);
       destroyRef.onDestroy(() => observer.disconnect());
 
-      if (this.options.start !== null) this.startPlay(this.options.start);
+      // `?debug` : la console (et les captures automatiques) peuvent viser une rame.
+      if (this.options.debug) Object.assign(window, { day07: this });
+
+      if (this.options.start !== null) this.startPlay(this.nextSeed(), this.options.start);
       else this.toIntro();
 
       const tick = (now: number) => {
@@ -684,30 +1058,17 @@ export default class Day07Swarm {
 
   // ------------------------------------------------------------ modes
 
-  /** Une nouvelle journée, avancée sans rendu jusqu'à `start` (au pilote automatique). */
-  private newDay(start: number): void {
-    const sim = new Sim(NET, ROUTES, DEMAND, {
-      seed: this.options.seed ?? undefined,
-      scenario: WEDNESDAY,
-      track: false,
-    });
-    let clockAuto = 0;
-    while (sim.time < start) {
-      sim.step(CONFIG.step);
-      clockAuto += CONFIG.step;
-      if (clockAuto >= CONFIG.autopilot.every) {
-        clockAuto = 0;
-        autopilot(sim);
-      }
-    }
-    sim.notices.length = 0;
-    sim.track = true;
-    this.sim = sim;
+  /** Une journée (joueur et fantôme), avancée sans rendu jusqu'à `start` au pilote automatique. */
+  private load(seed: number, start: number, bot: boolean): void {
+    this.closePop();
+    this.seed.set(seed);
+    this.duel = new Duel(NET, DEMAND, { seed, start, track: true });
+    this.bot = bot ? responder(NET) : null;
     this.feedLog = new Feed(NET);
     this.feed.set([]);
     this.acc = 0;
-    this.autoClock = 0;
-    this.swarm?.rebuild(sim);
+    this.botClock = 0;
+    this.swarm?.rebuild(this.sim);
     this.report.set(null);
     this.publish();
   }
@@ -717,17 +1078,23 @@ export default class Day07Swarm {
     this.auto.set(true);
     this.speed.set(ATTRACT.speed);
     this.paused.set(false);
-    this.newDay(ATTRACT.start);
+    this.load(ATTRACT.seed, ATTRACT.start, true);
   }
 
-  protected startPlay(start: number = CONFIG.day.start): void {
+  /** Après le bilan : une autre journée, annoncée par un nouveau briefing. */
+  protected newDay(): void {
+    this.nextSeed.set(this.options.seed ?? randomSeed());
+    this.toIntro();
+  }
+
+  protected startPlay(seed: number = this.nextSeed(), start: number = CONFIG.day.start): void {
     this.mode.set('play');
     this.auto.set(false);
     this.speed.set(0);
     this.paused.set(false);
     this.selected.set(null);
     this.renderer?.select(null);
-    this.newDay(start);
+    this.load(seed, start, false);
   }
 
   protected startDemo(): void {
@@ -737,7 +1104,7 @@ export default class Day07Swarm {
     this.paused.set(false);
     this.selected.set(null);
     this.renderer?.select(null);
-    this.newDay(DEMO.start);
+    this.load(DEMO.seed, DEMO.start, true);
   }
 
   private endOfDay(): void {
@@ -747,37 +1114,20 @@ export default class Day07Swarm {
       else this.toIntro();
       return;
     }
+    this.closePop();
     this.mode.set('report');
-    this.report.set(makeReport(this.sim));
-    this.benchmark.set(null);
+    this.report.set(makeReport(this.duel));
     this.bell.ding();
-    // La note du pilote automatique sur la même journée : une simulation sans rendu (une demi-seconde).
-    this.benchTimer = window.setTimeout(() => {
-      const bench = new Sim(NET, ROUTES, DEMAND, {
-        seed: this.options.seed ?? undefined,
-        scenario: WEDNESDAY,
-        track: false,
-      });
-      let c = 0;
-      while (bench.time < CONFIG.day.end) {
-        bench.step(CONFIG.step);
-        c += CONFIG.step;
-        if (c >= CONFIG.autopilot.every) {
-          c = 0;
-          autopilot(bench);
-        }
-      }
-      this.benchmark.set(makeReport(bench).note);
-    }, 120);
   }
 
   // ------------------------------------------------------------ boucle
 
   private step(dt: number): void {
-    const sim = this.sim;
+    const duel = this.duel;
     const renderer = this.renderer;
     const swarm = this.swarm;
-    if (!sim || !renderer || !swarm) return;
+    if (!duel || !renderer || !swarm) return;
+    const sim = duel.player;
 
     if (this.mode() !== 'report' && !this.paused()) {
       this.acc += dt * CONFIG.speeds[this.speed()];
@@ -789,12 +1139,12 @@ export default class Day07Swarm {
         this.acc -= steps * CONFIG.step;
       }
       for (let i = 0; i < steps; i++) {
-        sim.step(CONFIG.step);
-        if (this.auto()) {
-          this.autoClock += CONFIG.step;
-          if (this.autoClock >= CONFIG.autopilot.every) {
-            this.autoClock = 0;
-            autopilot(sim);
+        duel.step(CONFIG.step, this.auto());
+        if (this.bot) {
+          this.botClock += CONFIG.step;
+          if (this.botClock >= 1) {
+            this.botClock = 0;
+            this.bot.act(sim);
           }
         }
       }
@@ -803,8 +1153,10 @@ export default class Day07Swarm {
     this.readNotices();
     swarm.consume(sim.events);
     sim.events.length = 0;
-    swarm.update(dt);
-    renderer.draw(sim, swarm, dt, this.hover());
+    swarm.update(dt, sim.time);
+    const tram = this.target?.kind === 'tram' ? (sim.findTram(this.target.id) ?? null) : null;
+    const ring = this.target?.kind === 'station' ? this.target.id : this.hover;
+    renderer.draw(sim, swarm, dt, ring, tram);
 
     if (sim.time >= CONFIG.day.end && this.mode() !== 'report') this.endOfDay();
 
@@ -836,6 +1188,7 @@ export default class Day07Swarm {
     const sim = this.sim;
     const rows: LineRow[] = NET.lines.map((line) => {
       const st = sim.lineStatus(line);
+      const dev = DEVIATIONS.find((d) => d.line === line.id);
       return {
         id: line.id,
         color: line.color,
@@ -847,20 +1200,23 @@ export default class Day07Swarm {
         waiting: st.waiting * CONFIG.riderSize,
         wait: st.wait,
         level: st.wait >= 10 ? 2 : st.wait >= 6 ? 1 : 0,
+        deviation: dev ? { id: dev.id, label: dev.label, on: sim.plan.hasDeviation(dev.id) } : null,
       };
     });
     const s = sim.stats;
-    const done = s.arrived + s.abandoned;
     this.hud.set({
       time: sim.time,
       rows,
       depot: sim.depot,
       incoming: sim.incoming.length,
-      served: s.arrived * CONFIG.riderSize,
+      served: (s.arrived + s.walked) * CONFIG.riderSize,
       lost: s.abandoned * CONFIG.riderSize,
-      share: done ? s.arrived / done : 1,
+      points: sim.points,
+      ghost: this.duel.ghost.points,
+      incidents: this.active().map((inc) => this.chip(inc)),
     });
     this.updateHover();
+    this.refreshPop();
     if (this.options.debug && dt > 0) {
       this.debugLine.set(
         `${Math.round(1 / Math.max(dt, 1e-3))} i/s · ${this.swarm?.size ?? 0} points · ${sim.waitingCount()} à quai · ${sim.trams.length} rames`,
@@ -868,24 +1224,73 @@ export default class Day07Swarm {
     }
   }
 
+  private active(): ActiveIncident[] {
+    const engine = this.sim.incidents;
+    return engine instanceof IncidentEngine ? engine.active : [];
+  }
+
+  /** Où en est un imprévu, en une étiquette (et la station à ouvrir quand on clique dessus). */
+  private chip(inc: ActiveIncident): IncidentChip {
+    const s = inc.spec;
+    const tram = inc.tram !== null ? this.sim.findTram(inc.tram) : undefined;
+    let place = s.stations.length ? NAME(s.stations[0]) : '';
+    let station: number | null = s.stations[0] ?? null;
+    switch (s.kind) {
+      case 'car':
+        place = `${NAME(s.stations[0])} – ${NAME(s.stations[1])}`;
+        break;
+      case 'power':
+        place = `${NAME(s.stations[0])} → ${NAME(s.stations[s.stations.length - 1])}`;
+        break;
+      case 'cortege': {
+        station = this.cortegeHead(inc);
+        place = NAME(station);
+        break;
+      }
+      case 'rain':
+        place = s.stations.length ? `${place} fermée` : 'tout le réseau';
+        break;
+      case 'strike':
+        place = `${inc.withheld} rames retenues`;
+        station = null;
+        break;
+      case 'illness':
+      case 'breakdown':
+        if (tram) station = tram.path.stations[tram.k];
+        place = `L${s.line} · ${NAME(station!)}`;
+        break;
+    }
+    return { id: s.id, glyph: GLYPHS[s.kind], title: s.title, place, station };
+  }
+
+  /** La station du parcours que la tête du cortège a atteinte. */
+  private cortegeHead(inc: ActiveIncident): number {
+    const engine = this.sim.incidents as IncidentEngine;
+    const arc = engine.arc(inc.spec.id);
+    let i = 0;
+    while (i + 1 < arc.length && arc[i + 1] <= inc.head) i++;
+    return inc.spec.stations[i];
+  }
+
   private updateHover(): void {
-    const s = this.hover();
+    const s = this.hover;
     const r = this.renderer;
     if (s === null || !r) {
       if (this.hoverInfo()) this.hoverInfo.set(null);
       return;
     }
+    const sim = this.sim;
     const station = NET.stations[s];
-    const lists = this.sim.waiting[s];
+    const lists = sim.waiting[s];
     const x = Math.min(r.sx[s], this.host.clientWidth - 190);
     this.hoverInfo.set({
       x,
       y: Math.max(40, r.sy[s]),
       name: station.name,
       lines: station.lines.map((id) => {
-        const line = NET.lines.find((l) => l.id === id)!;
+        const line = LINE(id);
         const list = lists[NET.lines.indexOf(line)];
-        const wait = list.reduce((sum, rider) => sum + (this.sim.time - rider.waitSince), 0);
+        const wait = list.reduce((sum, rider) => sum + (sim.time - rider.waitSince), 0);
         return {
           id,
           color: line.color,
@@ -894,7 +1299,8 @@ export default class Day07Swarm {
           wait: list.length ? wait / list.length : 0,
         };
       }),
-      lost: this.sim.stats.abandonsBy[s] * CONFIG.riderSize,
+      lost: sim.stats.abandonsBy[s] * CONFIG.riderSize,
+      hint: this.mode() === 'play' ? 'Clic : desserte et circulation' : null,
     });
   }
 
@@ -909,7 +1315,280 @@ export default class Day07Swarm {
       ? { x: hud.right - host.left, y: 0, w: host.right - hud.right, h: host.height }
       : { x: 0, y: 0, w: host.width, h: hud.top - host.top };
     renderer.resize(host.width, host.height, Math.min(devicePixelRatio || 1, 2), view);
-    if (this.sim) this.swarm?.rebuild(this.sim);
+    if (this.duel) {
+      this.swarm?.rebuild(this.sim);
+      this.placePop();
+    }
+  }
+
+  // ------------------------------------------------------------ popovers
+
+  private open(target: Target): void {
+    if (this.mode() !== 'play') return;
+    if (this.target?.kind === target.kind && this.target.id === target.id) {
+      this.closePop();
+      return;
+    }
+    this.closePop();
+    this.target = target;
+    if (target.kind === 'tram' && !this.paused()) {
+      this.paused.set(true);
+      this.popPaused = true;
+    }
+    this.refreshPop();
+    this.bell.click();
+    afterNextRender(() => this.placePop(), { injector: this.injector });
+  }
+
+  protected closePop(): void {
+    if (!this.target) return;
+    this.target = null;
+    this.pop.set(null);
+    if (this.popPaused) {
+      this.popPaused = false;
+      this.paused.set(false);
+    }
+  }
+
+  private refreshPop(): void {
+    const t = this.target;
+    if (!t || !this.duel) return;
+    if (t.kind === 'station') {
+      this.pop.set(this.stationPop(t.id));
+    } else {
+      const tram = this.sim.findTram(t.id);
+      if (!tram) {
+        this.closePop();
+        return;
+      }
+      this.pop.set(this.tramPop(tram));
+    }
+    this.placePop();
+  }
+
+  /** À côté de la station ou de la rame, sans sortir de l'écran. */
+  private placePop(): void {
+    const t = this.target;
+    const r = this.renderer;
+    if (!t || !r) return;
+    let x: number;
+    let y: number;
+    if (t.kind === 'station') {
+      x = r.sx[t.id];
+      y = r.sy[t.id];
+    } else {
+      const tram = this.sim.findTram(t.id);
+      if (!tram) return;
+      ({ x, y } = r.tramPoint(tram));
+    }
+    const el = this.popRef()?.nativeElement;
+    const w = el?.offsetWidth ?? 280;
+    const h = el?.offsetHeight ?? 220;
+    const W = this.host.clientWidth;
+    const H = this.host.clientHeight;
+    let left = x + 16;
+    if (left + w > W - 8) left = x - 16 - w;
+    left = Math.max(8, Math.min(left, W - w - 8));
+    const top = Math.max(8, Math.min(y - 28, H - h - 8));
+    const pos = this.popPos();
+    if (pos.left !== left || pos.top !== top) this.popPos.set({ left, top });
+  }
+
+  private stationPop(s: number): Pop {
+    const sim = this.sim;
+    const st = sim.stationState(s);
+    const station = NET.stations[s];
+    const status: Pop['status'] = [];
+    for (const inc of this.active()) {
+      const text = this.incidentHere(inc, s);
+      if (text) status.push({ text, tone: 'alert' });
+    }
+    if (st.frozen) status.push({ text: 'Courant coupé : rames figées', tone: 'alert' });
+    else if (st.closed) status.push({ text: 'Quais évacués, aucune rame ne passe', tone: 'alert' });
+    else if (st.obstructed)
+      status.push({ text: 'Voie bloquée, aucune rame ne passe', tone: 'alert' });
+    if (st.provisional.length) {
+      status.push({
+        text: `Terminus provisoire : L${st.provisional.join(', L')}`,
+        tone: 'info',
+      });
+    }
+    const crowd = sim.crowdAt(s) * CONFIG.riderSize;
+    const actions: PopAction[] = [
+      {
+        key: 'skip',
+        label: st.skipped ? 'Desservir à nouveau' : 'Ne plus desservir',
+        hint: st.skipped
+          ? 'Les rames passent sans s’arrêter'
+          : 'Les rames passeront sans s’arrêter',
+        on: st.skipped,
+        disabled: st.cut ? 'Circulation interrompue' : null,
+      },
+      {
+        key: 'cut',
+        label: st.cut ? 'Rétablir la circulation' : 'Interrompre la circulation',
+        hint: st.cut
+          ? 'Les lignes sont coupées de part et d’autre'
+          : 'Lignes coupées en tronçons, terminus provisoires',
+        on: st.cut,
+        disabled: null,
+      },
+    ];
+    for (const { dev, stations } of DEVIATION_AT) {
+      if (!stations.has(s)) continue;
+      const on = sim.plan.hasDeviation(dev.id);
+      actions.push({
+        key: `dev:${dev.id}`,
+        label: on
+          ? `L${dev.line} : itinéraire normal`
+          : `L${dev.line} : itinéraire bis ${dev.label}`,
+        hint: on
+          ? 'La 1 passe par Les Aubes et Pompignane'
+          : 'Toute la ligne évite Comédie et la gare',
+        on,
+        disabled: null,
+      });
+    }
+    for (const to of this.troubledEdges(s)) {
+      const cut = sim.plan.isEdgeCut(s, to);
+      actions.push({
+        key: `edge:${to}`,
+        label: cut ? `Rétablir vers ${NAME(to)}` : `Couper le tronçon vers ${NAME(to)}`,
+        hint: cut ? 'Tronçon interrompu' : 'Les rames font demi-tour de chaque côté',
+        on: cut,
+        disabled: null,
+      });
+    }
+    return {
+      kind: 'station',
+      title: station.name,
+      sub: `${crowd} voyageur${crowd > 1 ? 's' : ''} à quai`,
+      lines: station.lines.map((id) => LINE(id)),
+      status,
+      actions,
+    };
+  }
+
+  /** Ce qu'un imprévu fait à cette station (ou rien). */
+  private incidentHere(inc: ActiveIncident, s: number): string | null {
+    const spec = inc.spec;
+    const left = eta(spec.until - this.sim.time);
+    switch (spec.kind) {
+      case 'cortege':
+        return inc.covered.includes(s) ? 'Manifestation : le cortège occupe la station' : null;
+      case 'illness':
+      case 'breakdown': {
+        const tram = inc.tram !== null ? this.sim.findTram(inc.tram) : undefined;
+        if (!tram || tram.immobile <= 0) return null;
+        const ids = tram.path.stations;
+        const here = ids[tram.k] === s || (tram.state === 'run' && ids[tram.k + 1] === s);
+        return here ? `${spec.title} : rame immobilisée, ${eta(tram.immobile)}` : null;
+      }
+      case 'strike':
+        return null;
+      default:
+        return spec.stations.includes(s) ? `${spec.title} : ${left}` : null;
+    }
+  }
+
+  /** Les tronçons autour de cette station qui posent problème (voiture, rame en panne) ou déjà coupés. */
+  private troubledEdges(s: number): number[] {
+    const sim = this.sim;
+    const out = new Set<number>();
+    for (const to of NEIGHBOURS[s]) {
+      if (sim.obstructions.blocksEdge(s, to) || sim.plan.isEdgeCut(s, to)) out.add(to);
+    }
+    for (const t of sim.trams) {
+      if (t.immobile <= 0 || t.state !== 'run') continue;
+      const ids = t.path.stations;
+      const a = ids[t.k];
+      const b = ids[(t.k + 1) % ids.length];
+      if (a === s) out.add(b);
+      else if (b === s) out.add(a);
+    }
+    return [...out];
+  }
+
+  private tramPop(t: Tram): Pop {
+    const sim = this.sim;
+    const ids = t.path.stations;
+    const status: Pop['status'] = [];
+    if (t.immobile > 0) {
+      const why = t.cause === 'illness' ? 'malaise voyageur' : 'panne';
+      status.push({ text: `Immobilisée (${why}), ${eta(t.immobile)}`, tone: 'alert' });
+    }
+    if (t.mode === 'deadhead') status.push({ text: 'Haut-le-pied : roule à vide', tone: 'info' });
+    if (t.retire) status.push({ text: 'Rentre au dépôt après son terminus', tone: 'info' });
+    if (t.holdUntil > sim.time)
+      status.push({ text: `Retenue jusqu’à ${clock(t.holdUntil)}`, tone: 'info' });
+    if (t.order) {
+      const label = ORDERS[t.order.kind].label;
+      status.push({ text: `Ordre en cours : ${label} (${NAME(t.order.at)})`, tone: 'info' });
+    }
+    if (t.path.deviation) status.push({ text: 'Déviée via Pompignane', tone: 'info' });
+    if (!t.path.loop && t.path.provisional[1])
+      status.push({ text: 'Tronçon : terminus provisoire', tone: 'info' });
+
+    const possible = sim.tramActions(t);
+    const kinds: TramOrderKind[] = ['hold', 'turnBack', 'deadhead', 'deviate', 'depot'];
+    const actions: PopAction[] = kinds
+      .filter((k) => k !== 'deviate' || DEVIATIONS.some((d) => d.line === t.line.id))
+      .map((k) => {
+        const check = possible[k];
+        return {
+          key: k,
+          label: ORDERS[k].label,
+          hint: ORDERS[k].hint(check.at !== undefined ? NAME(check.at) : ''),
+          on: false,
+          disabled: check.ok ? null : (check.reason ?? 'Impossible'),
+        };
+      });
+    const riders = t.riders.length * CONFIG.riderSize;
+    const dest = t.path.loop ? 'circulaire' : `vers ${NAME(ids[ids.length - 1])}`;
+    return {
+      kind: 'tram',
+      title: `Rame ${t.id}`,
+      sub: `${dest} · ${riders} à bord`,
+      lines: [LINE(t.line.id)],
+      status,
+      actions,
+    };
+  }
+
+  protected act(key: string): void {
+    const t = this.target;
+    if (!t || this.mode() !== 'play') return;
+    const sim = this.sim;
+    if (t.kind === 'tram') {
+      const result = sim.order(t.id, key as TramOrderKind);
+      this.bell.click();
+      if (result.ok) {
+        this.closePop();
+        this.readNotices();
+      } else {
+        this.refreshPop();
+      }
+      return;
+    }
+    const st = sim.stationState(t.id);
+    if (key === 'skip') sim.setSkip(t.id, !st.skipped);
+    else if (key === 'cut') sim.setCut(t.id, !st.cut);
+    else if (key.startsWith('dev:')) {
+      const id = key.slice(4);
+      sim.setDeviation(id, !sim.plan.hasDeviation(id));
+    } else if (key.startsWith('edge:')) {
+      const to = Number(key.slice(5));
+      sim.setCutEdge(t.id, to, !sim.plan.isEdgeCut(t.id, to));
+    }
+    this.bell.click();
+    this.readNotices();
+    this.refreshPop();
+  }
+
+  protected focusIncident(c: IncidentChip): void {
+    if (c.station === null) return;
+    if (this.mode() !== 'play') return;
+    this.open({ kind: 'station', id: c.station });
   }
 
   // ------------------------------------------------------------ commandes
@@ -937,24 +1616,34 @@ export default class Day07Swarm {
     this.publish();
   }
 
-  /** Toucher aux rames pendant l'accueil ou la démo : on prend le service tout de suite. */
+  protected toggleDeviation(id: string): void {
+    if (this.mode() === 'report') return;
+    this.takeOver();
+    this.sim.setDeviation(id, !this.sim.plan.hasDeviation(id));
+    this.bell.click();
+    this.readNotices();
+    this.publish();
+  }
+
+  /** Toucher aux commandes pendant l'accueil ou la démo : on prend le service tout de suite. */
   private takeOver(): void {
     if (this.mode() === 'intro' || this.mode() === 'demo') this.startPlay();
     else if (this.auto()) this.auto.set(false);
   }
 
   protected togglePause(): void {
+    this.popPaused = false;
     this.paused.update((p) => !p);
   }
 
   protected setSpeed(i: number): void {
     this.speed.set(i);
+    this.popPaused = false;
     this.paused.set(false);
   }
 
   protected toggleAuto(): void {
     this.auto.update((a) => !a);
-    this.autoClock = CONFIG.autopilot.every;
   }
 
   protected toggleSound(): void {
@@ -973,18 +1662,53 @@ export default class Day07Swarm {
 
   // ------------------------------------------------------------ pointeur, clavier, onglet
 
-  protected onPointer(event: PointerEvent): void {
+  /** Ce qu'il y a sous le pointeur : la rame si elle est plus proche que la station. */
+  private pick(event: PointerEvent): Target | null {
+    const r = this.renderer;
+    if (!r || !this.duel) return null;
     const rect = this.host.getBoundingClientRect();
-    const station =
-      this.renderer?.stationAt(event.clientX - rect.left, event.clientY - rect.top) ?? null;
-    if (station !== this.hover()) {
-      this.hover.set(station);
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const station = r.stationAt(x, y);
+    const tram = r.tramAt(x, y, this.sim.trams);
+    if (tram) {
+      const p = r.tramPoint(tram);
+      const dt = (p.x - x) ** 2 + (p.y - y) ** 2;
+      const ds = station === null ? Infinity : (r.sx[station] - x) ** 2 + (r.sy[station] - y) ** 2;
+      if (dt <= ds) return { kind: 'tram', id: tram.id };
+    }
+    return station === null ? null : { kind: 'station', id: station };
+  }
+
+  protected onPointerMove(event: PointerEvent): void {
+    const target = this.pick(event);
+    const station = target?.kind === 'station' ? target.id : null;
+    if (station !== this.hover) {
+      this.hover = station;
       this.updateHover();
     }
+    const cursor = target && this.mode() === 'play' ? 'pointer' : 'default';
+    if (cursor !== this.cursor()) this.cursor.set(cursor);
+  }
+
+  protected onPointerDown(event: PointerEvent): void {
+    this.onPointerMove(event);
+    const target = this.pick(event);
+    if (target) this.open(target);
+    else this.closePop();
+  }
+
+  protected clearHover(): void {
+    this.hover = null;
+    this.updateHover();
   }
 
   protected onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.code === 'Escape' && this.target) {
+      this.closePop();
+      return;
+    }
     const target = event.target as HTMLElement | null;
     if (target?.closest('input, select, textarea, [contenteditable], [role="dialog"]')) return;
     if ((event.code === 'Space' || event.code === 'Enter') && target?.closest('button')) return;
@@ -1043,7 +1767,7 @@ export default class Day07Swarm {
         this.toggleSound();
         break;
       case 'KeyR':
-        this.startPlay();
+        this.startPlay(this.mode() === 'play' ? this.seed() : this.nextSeed());
         break;
       case 'Escape':
         if (this.selected() !== null) this.select(this.selected()!);
@@ -1056,4 +1780,28 @@ export default class Day07Swarm {
     this.last = 0;
     this.bell.setHidden(document.hidden);
   }
+}
+
+/** Le briefing de 6 h : ce que le PC sait le matin (grève, manif déclarée, météo, soirée). */
+function briefingOf(seed: number): string[] {
+  const day = drawDay(NET, seed);
+  const out: string[] = [];
+  for (const s of day.incidents) {
+    if (s.kind === 'strike') {
+      out.push(`Grève jusqu’à 10 h : ${s.params.withhold} rames de moins au dépôt.`);
+    } else if (s.kind === 'cortege') {
+      out.push(
+        `Manifestation déclarée à ${hhmm(s.at)} : départ de la Comédie, tour de l’Écusson au pas.`,
+      );
+    } else if (s.kind === 'rain') {
+      out.push('Météo : risque d’épisode méditerranéen dans la journée.');
+    }
+  }
+  out.push(
+    day.evening === 'match'
+      ? 'Ce soir : match à 20 h au stade de la Mosson (lignes 1 et 3).'
+      : 'Ce soir : concert à 20 h 30 à la Sud de France Arena (ligne 3, branche Pérols).',
+  );
+  out.push('Et quelques imprévus que personne n’a vus venir.');
+  return out;
 }

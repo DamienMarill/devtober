@@ -1,10 +1,13 @@
 import { CONFIG } from './config';
-import { Sim } from './sim';
+import type { Duel } from './duel';
 
 export interface Report {
-  /** Voyageurs arrivés à destination (points × 10). */
+  /** Points du joueur et du fantôme (+1 arrivé, −3 abandon, −1 attente de plus de 10 min, en voyageurs). */
+  points: number;
+  ghostPoints: number;
+  /** Voyageurs arrivés en tram (points × 10). */
   served: number;
-  /** Voyageurs partis à pied. */
+  /** Voyageurs partis à pied (abandons). */
   lost: number;
   /** Voyageurs arrivés à pied (réseau coupé) : ni servis ni perdus. */
   walked: number;
@@ -14,19 +17,13 @@ export interface Report {
   wait: number;
   worst: { station: string; lost: number } | null;
   peak: { station: string; count: number; at: number };
+  /** Note sur 20 face au fantôme. */
   note: number;
   title: string;
+  /** Chaque imprévu : pertes du joueur et du fantôme (abandons ×3 + retards, en voyageurs). */
+  incidents: { title: string; at: number; player: number; ghost: number }[];
   servedByHour: readonly number[];
   lostByHour: readonly number[];
-}
-
-/** Bornes de la note : en dessous de `floor` servis, 0/20 ; à `top` et au-dessus, 20/20. */
-export const NOTE = { floor: 0.72, top: 0.985 };
-
-/** La note sur 20, au demi-point. */
-export function noteFor(share: number): number {
-  const x = (share - NOTE.floor) / (NOTE.top - NOTE.floor);
-  return Math.round(Math.max(0, Math.min(1, x)) * 40) / 2;
 }
 
 /**
@@ -50,23 +47,25 @@ export function titleFor(note: number): string {
   return 'La Métropole réfléchit à te confier plutôt les navettes de nuit.';
 }
 
-export function makeReport(sim: Sim): Report {
+export function makeReport(duel: Duel): Report {
+  const sim = duel.player;
   const st = sim.stats;
   const size = CONFIG.riderSize;
   const done = st.arrived + st.abandoned;
-  const share = done ? st.arrived / done : 1;
   let worst: Report['worst'] = null;
   st.abandonsBy.forEach((n, s) => {
     if (n > 0 && (!worst || n * size > worst.lost)) {
       worst = { station: sim.net.stations[s].name, lost: n * size };
     }
   });
-  const note = noteFor(share);
+  const note = noteVsGhost(sim.points, duel.ghost.points, st.spawned * size);
   return {
+    points: sim.points,
+    ghostPoints: duel.ghost.points,
     served: st.arrived * size,
     lost: st.abandoned * size,
     walked: st.walked * size,
-    share,
+    share: done ? st.arrived / done : 1,
     wait: st.waits ? st.waitSum / st.waits : 0,
     worst,
     peak: {
@@ -76,6 +75,12 @@ export function makeReport(sim: Sim): Report {
     },
     note,
     title: titleFor(note),
+    incidents: duel.incidentDeltas().map((d) => ({
+      title: d.spec.title,
+      at: d.spec.at,
+      player: d.player,
+      ghost: d.ghost,
+    })),
     servedByHour: st.servedByHour.map((n) => n * size),
     lostByHour: st.lostByHour.map((n) => n * size),
   };

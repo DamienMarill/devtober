@@ -214,6 +214,10 @@ function planText(n: PlanNotice, name: (s: number) => string): string {
       return `L${n.line} : itinéraire bis via Les Aubes et Pompignane.`;
     case 'deviation-off':
       return `L${n.line} : retour à l’itinéraire normal.`;
+    case 'cut-edge':
+      return `${name(n.station)} – ${name(n.to)} : circulation interrompue sur ce tronçon.`;
+    case 'uncut-edge':
+      return `${name(n.station)} – ${name(n.to)} : circulation rétablie sur ce tronçon.`;
   }
 }
 
