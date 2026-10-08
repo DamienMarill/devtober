@@ -253,6 +253,8 @@ export interface Piece {
   strokes: Stroke[];
   textes: Record<string, TextField>;
   cases: Record<string, CaseState>;
+  /** Révision d'affichage : augmente à chaque geste sur la pièce (l'interface ne redessine que ce qui change). */
+  v: number;
 }
 
 export interface Exigence {

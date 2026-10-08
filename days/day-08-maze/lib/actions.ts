@@ -15,12 +15,14 @@ export class Seq {
 export function stamp(piece: Piece, seq: Seq, p: Omit<Print, 'seq'>): Print {
   const print: Print = { ...p, seq: seq.next() };
   piece.prints.push(print);
+  piece.v++;
   return print;
 }
 
 export function stroke(piece: Piece, seq: Seq, s: Omit<Stroke, 'seq'>): Stroke {
   const out: Stroke = { ...s, points: s.points.map((p) => ({ ...p })), seq: seq.next() };
   piece.strokes.push(out);
+  piece.v++;
   return out;
 }
 
@@ -38,6 +40,7 @@ export function type(piece: Piece, seq: Seq, champ: string, key: string): void {
     field.chars.push({ c: key, barre: false });
   }
   field.seq = seq.next();
+  piece.v++;
 }
 
 /** Le texte du champ, ratures exclues. */
@@ -65,6 +68,7 @@ export function toggle(piece: Piece, seq: Seq, champ: string): boolean {
   c.cochee = !c.cochee;
   c.bascules++;
   c.seq = seq.next();
+  piece.v++;
   return c.cochee;
 }
 

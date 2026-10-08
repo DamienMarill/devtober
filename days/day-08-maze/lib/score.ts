@@ -29,7 +29,8 @@ export interface Releve {
 
 export function noteFor(score: number, objectif: number): Releve['note'] {
   const ratio = objectif > 0 ? score / objectif : 1;
-  return CONFIG.notes.find((n) => ratio >= n.min)!.note;
+  // Un score négatif (le reliquat transféré chez Gérard) vaut E, comme tout ce qui est sous 80 %.
+  return CONFIG.notes.find((n) => ratio >= n.min)?.note ?? 'E';
 }
 
 const ABSURDITY: Record<RetourType, number> = { R3: 3, R2: 2, NON_ACCUSE: 1, R1: 0 };

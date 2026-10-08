@@ -219,6 +219,14 @@ export class Bureau {
     return d;
   }
 
+  /** Commence la journée plus tard (la démo) : l'horloge saute à `t`, les arrivées d'avant sont oubliées. */
+  commencerA(t: number): void {
+    this.t = t;
+    this.lastHour = Math.floor(this.minute() / 60);
+    while (this.nextArrival < this.arrivees.length && this.arrivees[this.nextArrival] <= t)
+      this.nextArrival++;
+  }
+
   /** Débogage : un dossier de plus sur la pile, tout de suite. */
   ajouter(): void {
     this.arrive();

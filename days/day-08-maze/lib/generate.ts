@@ -178,6 +178,7 @@ export function blankPiece(
     strokes: [],
     textes: {},
     cases: {},
+    v: 0,
   };
 }
 

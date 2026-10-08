@@ -98,7 +98,16 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
   8: {
     component: () => import('./day-08-maze/day-08-maze').then((m) => m.default),
     readme: () => import('./day-08-maze/README.md').then((m) => m.default),
-    capture: { click: null, seconds: 10 },
+    // La touche T lance la démo : un mardi à partir de 14 h 45, joué par un curseur fantôme. Le premier dossier
+    // revient par le tube, puis le rush de fin de journée fait s'effondrer la pile vers 26 s.
+    capture: {
+      click: null,
+      key: 't',
+      seconds: 30,
+      settle: 2500,
+      thumbnailAt: 8,
+      thumbnailFocus: 0.5,
+    },
   },
   // new-day:insert
 };

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bureau } from './bureau';
 import { playDay } from './bots';
 import { CONFIG } from './config';
+import { noteFor, releve } from './score';
 import { applyAction, solve } from './solve';
 import { signatureOf } from './signature-samples';
 
@@ -144,6 +145,9 @@ describe('la journée au guichet', () => {
     expect(b.pile.length).toBe(CONFIG.pile.reliquatMax);
     expect(b.stats.transferes).toBeGreaterThan(0);
     expect(b.score).toBe(-CONFIG.score.penaliteReliquat * b.stats.transferes);
+    expect(releve(b).note).toBe('E');
+    expect(noteFor(240, 180)).toBe('A');
+    expect(noteFor(150, 180)).toBe('D');
     const carry = b.carry();
     const next = new Bureau({ jour: 2, seed: 6, specimen, carry });
     expect(next.pile.slice(0, 4)).toEqual(carry.pile);
