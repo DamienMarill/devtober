@@ -10,6 +10,7 @@
     "new-day": "node scripts/new-day.mjs",
     "gif": "node scripts/gif.mjs",
     "thumbnail": "node scripts/thumbnail.mjs",
+    "balance": "vitest run days/day-08-maze/lib/balance.spec.ts --silent=false",
     "build:pages": "ng build --base-href /devtober/ && cp dist/devtober/browser/index.html dist/devtober/browser/404.html && node scripts/social-pages.mjs"
   },
   "private": true,

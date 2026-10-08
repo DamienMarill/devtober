@@ -95,5 +95,10 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
       thumbnailFocus: 0.3,
     },
   },
+  8: {
+    component: () => import('./day-08-maze/day-08-maze').then((m) => m.default),
+    readme: () => import('./day-08-maze/README.md').then((m) => m.default),
+    capture: { click: null, seconds: 10 },
+  },
   // new-day:insert
 };
