@@ -6,6 +6,7 @@ import { epaisseur, ficheRetour, fillerPiece, genererDossier, pickModel } from '
 import type { Dossier, Piece, Pt, RetourType } from './model';
 import { Rng, mix } from './rng';
 import { checkDossier, DEFAULT_RULES, type RuleContext } from './rules';
+import type { Specimen } from './signature';
 
 /**
  * La journée au guichet, sans affichage : l'horloge, les arrivées, la pile, les retours par le tube, le score,
@@ -48,7 +49,7 @@ export type Phase = 'travail' | 'grace' | 'fini' | 'effondre';
 export interface BureauInit {
   jour: number;
   seed: number;
-  specimen: Pt[][] | null;
+  specimen: Specimen | null;
   carry?: Carry | null;
   /** Le dossier de prise de poste en haut de la pile (le lundi). */
   tutoriel?: boolean;
@@ -196,7 +197,7 @@ export class Bureau {
     p.lieu = 'archives';
     p.flipped = false;
     p.x = this.rngArchives.range(150, 1130);
-    p.y = this.rngArchives.range(170, 520);
+    p.y = this.rngArchives.range(190, 500);
     p.rot = this.rngArchives.range(-25, 25);
     p.z = ++this.zCounter;
   }

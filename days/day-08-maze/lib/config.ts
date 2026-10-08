@@ -24,19 +24,21 @@ export const CONFIG = {
   signature: {
     seuil: 0.7,
     seuilDemandeur: 0.4,
-    seuilSpecimen: 0.6,
+    seuilSpecimen: 0.65,
     longueurMin: 120,
-    /** Part des points qui doivent tomber dans le cadre. */
+    /** Part des points qui doivent tomber dans le cadre (à `marge` px près). */
     dansCadre: 0.8,
+    marge: 8,
     /** Deux traits restent une même signature si le stylo quitte le papier moins de… */
     pauseMax: 1.5,
     /** Points du nuage $P. */
     points: 32,
     /**
-     * Distance $P+ qui vaut une ressemblance nulle. Calibrée sur des signatures de synthèse (rules.spec.ts) : les
-     * essais d'une même main restent sous 0,20, un zigzag ou un trait droit dépassent 0,28.
+     * Distance $P+ qui vaut une ressemblance nulle. Calibrée sur des signatures de synthèse déformées comme à la
+     * souris (proportions écrasées de moitié, boucles inégales) : une même main reste sous 0,28 du meilleur des
+     * trois spécimens, un zigzag, un trait, un gribouillis ou un cercle dépassent 0,41. Le seuil de 0,70 tombe à 0,345.
      */
-    distanceNulle: 0.8,
+    distanceNulle: 1.15,
   },
   paraphe: { longueurMin: 40 },
   tampon: {

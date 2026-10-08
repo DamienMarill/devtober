@@ -6,36 +6,40 @@ import type { Bloc, Face, Field, Format, LaidBloc, Rect } from './model';
  * joueur voit est exactement ce que le jeu vérifie.
  */
 export const FORMATS: Record<Format, { w: number; h: number; pad: number }> = {
-  a4: { w: 190, h: 262, pad: 12 },
-  demi: { w: 190, h: 150, pad: 11 },
-  ticket: { w: 108, h: 176, pad: 8 },
-  carte: { w: 176, h: 112, pad: 9 },
-  photo: { w: 124, h: 150, pad: 8 },
-  etiquette: { w: 136, h: 124, pad: 9 },
-  bordereau: { w: 214, h: 360, pad: 11 },
-  fiche: { w: 186, h: 150, pad: 10 },
+  a4: { w: 238, h: 328, pad: 14 },
+  demi: { w: 238, h: 190, pad: 13 },
+  ticket: { w: 136, h: 220, pad: 10 },
+  carte: { w: 220, h: 140, pad: 11 },
+  photo: { w: 155, h: 188, pad: 10 },
+  etiquette: { w: 170, h: 156, pad: 11 },
+  bordereau: { w: 284, h: 450, pad: 13 },
+  fiche: { w: 232, h: 188, pad: 12 },
 };
 
 /** Corps, interligne et chasse moyenne (en em) de chaque style de texte : de quoi estimer les retours à la ligne. */
 export const TYPO = {
-  titre: { size: 11, lh: 13, chasse: 0.52 },
-  meta: { size: 8.5, lh: 10.5, chasse: 0.47 },
-  texte: { size: 9.5, lh: 11.5, chasse: 0.46 },
-  gras: { size: 9.5, lh: 11.5, chasse: 0.5 },
-  manuscrit: { size: 12, lh: 13, chasse: 0.44 },
-  machine: { size: 8.5, lh: 11, chasse: 0.62 },
-  petit: { size: 6, lh: 7, chasse: 0.47 },
-  ligne: { size: 9.5, lh: 11.5, chasse: 0.47 },
-  valeur: { size: 9.5, lh: 12.5, chasse: 0.47 },
-  label: { size: 8, lh: 10, chasse: 0.47 },
+  titre: { size: 13.5, lh: 16, chasse: 0.52 },
+  meta: { size: 10.5, lh: 13, chasse: 0.47 },
+  texte: { size: 12, lh: 14.5, chasse: 0.46 },
+  gras: { size: 12, lh: 14.5, chasse: 0.5 },
+  manuscrit: { size: 15, lh: 16, chasse: 0.44 },
+  machine: { size: 10.5, lh: 13.5, chasse: 0.62 },
+  petit: { size: 7, lh: 8.5, chasse: 0.47 },
+  ligne: { size: 13, lh: 15.5, chasse: 0.47 },
+  valeur: { size: 12, lh: 15.5, chasse: 0.47 },
+  label: { size: 10, lh: 12.5, chasse: 0.47 },
 } as const;
 
-export const GAP = 3;
-export const CASE = 11;
-export const SIGNATURE_H = 40;
-export const CACHET = { w: 88, h: 52 };
-export const PARAPHE = { w: 40, h: 24 };
-export const CHAMP_H = 17;
+export const GAP = 4;
+export const CASE = 14;
+/** Un cadre de signature fait au moins `SIGNATURE_MIN` de large : on ne signe pas dans un timbre-poste. */
+export const SIGNATURE_H = 50;
+export const SIGNATURE_MIN = 140;
+export const CACHET = { w: 108, h: 64 };
+export const PARAPHE = { w: 50, h: 30 };
+export const CHAMP_H = 22;
+/** Les motifs dessinés (patte, photo…) suivent l'agrandissement du texte. */
+export const MOTIF = 1.25;
 
 /** Nombre de lignes d'un texte de `width` px dans le style donné (estimation prudente, mot à mot). */
 export function lineCount(text: string, width: number, style: keyof typeof TYPO): number {
@@ -141,7 +145,7 @@ export function layoutBlocs(
         break;
       }
       case 'signature': {
-        const sw = Math.min(inner, 168);
+        const sw = Math.min(inner, 210);
         const rect = { x: pad, y, w: sw, h: TYPO.label.lh + SIGNATURE_H };
         const box = { x: pad, y: y + TYPO.label.lh, w: sw, h: SIGNATURE_H };
         fields.push({
@@ -162,9 +166,10 @@ export function layoutBlocs(
         break;
       }
       case 'pied': {
-        const sw = inner - CACHET.w - 6;
+        const sw = inner - CACHET.w - 8;
+        if (sw < SIGNATURE_MIN) throw new Error(`Pied trop étroit pour signer (${sw} px)`);
         const sig = { x: pad, y, w: sw, h: CACHET.h };
-        const cachet = { x: pad + sw + 6, y, w: CACHET.w, h: CACHET.h };
+        const cachet = { x: pad + sw + 8, y, w: CACHET.w, h: CACHET.h };
         fields.push({
           id: bloc.signature.id,
           kind: 'signature',
@@ -196,7 +201,7 @@ export function layoutBlocs(
         break;
       }
       case 'motif': {
-        push(bloc, { x: pad, y, w: inner, h: bloc.hauteur ?? 40 });
+        push(bloc, { x: pad, y, w: inner, h: (bloc.hauteur ?? 40) * MOTIF });
         break;
       }
       case 'espace': {

@@ -128,7 +128,7 @@ export function solve(
       }
       case 'signer': {
         if (!piece || !field || !ctx.specimen) break;
-        let strokes = fitStrokes(ctx.specimen, field.rect);
+        let strokes = fitStrokes(ctx.specimen[0], field.rect);
         if (ex.sens === 'rtl') strokes = reversed(strokes);
         actions.push({
           k: 'sign',

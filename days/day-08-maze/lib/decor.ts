@@ -58,9 +58,9 @@ import { CONFIG } from './config';
       </defs>
 
       <!-- Le mur : vert d'eau jusqu'à mi-hauteur, beige nicotine au-dessus, et une fissure qui s'allonge chaque jour. -->
-      <rect width="1280" height="134" fill="url(#dz-wall)" />
+      <rect width="1280" height="106" fill="url(#dz-wall)" />
       <path [attr.d]="crack()" fill="none" stroke="#6d6250" stroke-width="1.2" opacity="0.7" />
-      <rect y="130" width="1280" height="6" fill="#4d3a26" />
+      <rect y="102" width="1280" height="6" fill="#4d3a26" />
 
       <!-- Néons. -->
       @for (n of [0, 1, 2]; track n) {
@@ -77,7 +77,7 @@ import { CONFIG } from './config';
       }
 
       <!-- Affiche, calendrier de 1987, défense de fumer. -->
-      <g transform="translate(246 26) rotate(-1.5) scale(0.86)">
+      <g transform="translate(240 14) rotate(-1.5) scale(0.8)">
         <rect width="88" height="76" fill="#e7dcc0" stroke="#9c8f72" />
         <rect x="8" y="8" width="72" height="34" fill="#8fa3b0" />
         <circle cx="44" cy="28" r="9" fill="#e7dcc0" />
@@ -85,14 +85,14 @@ import { CONFIG } from './config';
         <text x="44" y="63" text-anchor="middle" class="poster">EST UN AGENT</text>
         <text x="44" y="72" text-anchor="middle" class="poster">PRODUCTIF</text>
       </g>
-      <g transform="translate(866 22) rotate(1)">
+      <g transform="translate(830 10) rotate(1) scale(0.86)">
         <rect width="74" height="96" fill="#efe9da" stroke="#9c8f72" />
         <rect x="5" y="5" width="64" height="40" fill="#5d7f9b" />
         <path d="M12 38l14-16 10 10 8-8 14 14" fill="none" stroke="#efe9da" stroke-width="2" />
         <text x="37" y="60" text-anchor="middle" class="poster">LA POSTE</text>
         <text x="37" y="80" text-anchor="middle" class="annee">1987</text>
       </g>
-      <g transform="translate(962 36)">
+      <g transform="translate(930 20)">
         <rect width="70" height="34" rx="3" fill="#efe9da" stroke="#b3261e" stroke-width="2" />
         <text x="35" y="15" text-anchor="middle" class="poster red">DÉFENSE</text>
         <text x="35" y="26" text-anchor="middle" class="poster red">DE FUMER</text>
@@ -164,7 +164,7 @@ import { CONFIG } from './config';
         fill="url(#dz-glass)"
       />
       <g
-        [attr.transform]="'translate(' + (R.porte.x + R.porte.w / 2) + ' ' + (R.porte.y + 60) + ')'"
+        [attr.transform]="'translate(' + (R.porte.x + R.porte.w / 2) + ' ' + (R.porte.y + 56) + ')'"
         fill="#5f6a66"
         opacity="0.45"
       >
@@ -173,7 +173,7 @@ import { CONFIG } from './config';
       </g>
       <text
         [attr.x]="R.porte.x + R.porte.w / 2"
-        [attr.y]="R.porte.y + 30"
+        [attr.y]="R.porte.y + 26"
         text-anchor="middle"
         class="pochoir sombre"
       >
@@ -181,10 +181,10 @@ import { CONFIG } from './config';
       </text>
 
       <!-- Le bureau en stratifié imitation bois, écaillé sur les bords. -->
-      <rect y="136" width="1280" height="584" fill="url(#dz-desk)" />
-      <rect y="136" width="1280" height="584" fill="url(#dz-grain)" />
-      <path d="M0 140h1280" stroke="#a37f55" stroke-width="2" opacity="0.6" />
-      <path d="M240 137q8 6 18 1M760 137q6 5 14 0M1110 137q10 7 20 1" fill="#4d3a26" />
+      <rect y="106" width="1280" height="614" fill="url(#dz-desk)" />
+      <rect y="106" width="1280" height="614" fill="url(#dz-grain)" />
+      <path d="M0 110h1280" stroke="#a37f55" stroke-width="2" opacity="0.6" />
+      <path d="M240 107q8 6 18 1M760 107q6 5 14 0M1080 107q10 7 20 1" fill="#4d3a26" />
 
       <!-- La cloison derrière la pile, avec sa ligne rouge de danger peinte. -->
       <rect
@@ -241,7 +241,7 @@ import { CONFIG } from './config';
       </text>
 
       <!-- Le tube pneumatique. -->
-      <rect [attr.x]="R.tube.x + 18" y="100" width="36" height="40" fill="url(#dz-metal)" />
+      <rect [attr.x]="R.tube.x + 20" y="72" width="36" height="40" fill="url(#dz-metal)" />
       <rect
         [attr.x]="R.tube.x"
         [attr.y]="R.tube.y"
@@ -263,16 +263,16 @@ import { CONFIG } from './config';
       <g [attr.transform]="'translate(' + R.corbeille.x + ' ' + R.corbeille.y + ')'">
         <ellipse
           [attr.cx]="R.corbeille.w / 2"
-          cy="28"
+          [attr.cy]="R.corbeille.h / 2"
           [attr.rx]="R.corbeille.w / 2 - 6"
-          ry="26"
+          [attr.ry]="R.corbeille.h / 2 - 4"
           fill="#2c2721"
         />
         <ellipse
           [attr.cx]="R.corbeille.w / 2"
-          cy="28"
+          [attr.cy]="R.corbeille.h / 2"
           [attr.rx]="R.corbeille.w / 2 - 6"
-          ry="26"
+          [attr.ry]="R.corbeille.h / 2 - 4"
           fill="none"
           stroke="#9aa196"
           stroke-width="3"
@@ -299,12 +299,12 @@ import { CONFIG } from './config';
         stroke="#7b8f6f"
         stroke-opacity="0.35"
       />
-      <circle cx="870" cy="200" r="22" fill="#2b4136" opacity="0.6" />
-      <circle cx="320" cy="520" r="14" fill="#2b4136" opacity="0.5" />
+      <circle cx="968" cy="168" r="22" fill="#2b4136" opacity="0.6" />
+      <circle cx="262" cy="584" r="14" fill="#2b4136" opacity="0.5" />
       @if (jour() >= 2) {
         <circle
-          cx="842"
-          cy="500"
+          cx="948"
+          cy="540"
           r="28"
           fill="none"
           stroke="#5a3d22"
@@ -331,9 +331,9 @@ import { CONFIG } from './config';
         stroke="#3c2b1a"
       />
       <rect
-        [attr.x]="R.tampons.x + 4"
-        [attr.y]="R.tampons.y + 84"
-        [attr.width]="R.tampons.w - 8"
+        [attr.x]="R.tampons.x + 354"
+        [attr.y]="R.tampons.y + 2"
+        [attr.width]="R.tampons.w - 358"
         height="48"
         rx="4"
         fill="#4a3522"
@@ -359,14 +359,21 @@ import { CONFIG } from './config';
         />
         @for (i of [1, 2, 3, 4, 5, 6]; track i) {
           <line
-            [attr.x1]="10 + i * 38"
+            [attr.x1]="10 + i * 34"
             y1="12"
-            [attr.x2]="10 + i * 38"
+            [attr.x2]="10 + i * 34"
             [attr.y2]="R.sortant.h - 12"
             stroke="#5b6b63"
           />
         }
-        <rect x="70" [attr.y]="R.sortant.h - 28" width="150" height="22" rx="2" fill="#d8d0b8" />
+        <rect
+          [attr.x]="R.sortant.w / 2 - 75"
+          [attr.y]="R.sortant.h - 28"
+          width="150"
+          height="22"
+          rx="2"
+          fill="#d8d0b8"
+        />
         <text
           [attr.x]="R.sortant.w / 2"
           [attr.y]="R.sortant.h - 12"
@@ -379,21 +386,21 @@ import { CONFIG } from './config';
 
       <!-- Coin de décor : ficus en plastique, gobelet de café froid, badge de l'agent. -->
       <g [attr.transform]="'translate(' + R.deco.x + ' ' + R.deco.y + ')'">
-        <ellipse cx="220" cy="190" rx="44" ry="24" fill="#5b3d2a" />
+        <ellipse cx="190" cy="176" rx="40" ry="22" fill="#5b3d2a" />
         @for (l of leaves; track $index) {
           <ellipse
-            [attr.cx]="220 + l.x"
-            [attr.cy]="150 + l.y"
+            [attr.cx]="190 + l.x"
+            [attr.cy]="138 + l.y"
             rx="16"
             ry="7"
-            [attr.transform]="'rotate(' + l.r + ' ' + (220 + l.x) + ' ' + (150 + l.y) + ')'"
+            [attr.transform]="'rotate(' + l.r + ' ' + (190 + l.x) + ' ' + (138 + l.y) + ')'"
             [attr.fill]="l.c"
           />
         }
-        <circle cx="60" cy="70" r="26" fill="#e9e3d6" stroke="#b8ae9a" stroke-width="2" />
-        <circle cx="60" cy="70" r="19" fill="#4a2f1d" />
-        <path d="M46 64q14 6 28 0" stroke="#8c6a4c" stroke-width="2" fill="none" opacity="0.8" />
-        <g transform="translate(18 132) rotate(-8)">
+        <circle cx="52" cy="50" r="26" fill="#e9e3d6" stroke="#b8ae9a" stroke-width="2" />
+        <circle cx="52" cy="50" r="19" fill="#4a2f1d" />
+        <path d="M38 44q14 6 28 0" stroke="#8c6a4c" stroke-width="2" fill="none" opacity="0.8" />
+        <g transform="translate(10 104) rotate(-8)">
           <rect width="112" height="66" rx="5" fill="#ece6d8" stroke="#8c8270" />
           <rect x="8" y="8" width="36" height="44" fill="#b9b2a5" />
           <text x="52" y="22" class="badge">AGENT 7B</text>
@@ -415,16 +422,16 @@ import { CONFIG } from './config';
         @for (i of [0, 1]; track i) {
           <rect
             x="12"
-            [attr.y]="12 + i * 68"
+            [attr.y]="12 + i * 112"
             [attr.width]="R.archives.w - 24"
-            height="58"
+            height="100"
             rx="4"
             fill="#617269"
             stroke="#3e4b45"
           />
           <rect
             [attr.x]="R.archives.w / 2 - 34"
-            [attr.y]="44 + i * 68"
+            [attr.y]="78 + i * 112"
             width="68"
             height="10"
             rx="5"
@@ -432,19 +439,19 @@ import { CONFIG } from './config';
           />
           <rect
             [attr.x]="R.archives.w / 2 - 44"
-            [attr.y]="20 + i * 68"
+            [attr.y]="24 + i * 112"
             width="88"
             height="18"
             fill="#d8d0b8"
           />
         }
-        <text [attr.x]="R.archives.w / 2" y="34" text-anchor="middle" class="pochoir">
+        <text [attr.x]="R.archives.w / 2" y="38" text-anchor="middle" class="pochoir">
           ARCHIVES
         </text>
-        <text [attr.x]="R.archives.w / 2" y="102" text-anchor="middle" class="pochoir">
+        <text [attr.x]="R.archives.w / 2" y="150" text-anchor="middle" class="pochoir">
           1974 – 2027
         </text>
-        <circle cx="236" cy="54" r="4" fill="#3e4b45" />
+        <circle [attr.cx]="R.archives.w - 22" cy="62" r="4" fill="#3e4b45" />
       </g>
     </svg>
   `,
@@ -561,7 +568,7 @@ export class MazeDecor {
     r: i * 41,
     c: i % 3 ? '#4f7a4a' : '#6b9460',
   }));
-  protected readonly basket = Array.from({ length: 9 }, (_, i) => `M${18 + i * 18} 6v44`).join('');
+  protected readonly basket = Array.from({ length: 9 }, (_, i) => `M${18 + i * 17} 10v66`).join('');
 
   protected crack(): string {
     const n = this.jour();

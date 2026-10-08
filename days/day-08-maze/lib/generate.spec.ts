@@ -9,7 +9,7 @@ import { checkDossier, DEFAULT_RULES, type RuleContext } from './rules';
 import { signatureOf } from './signature-samples';
 import { applyAction, solve } from './solve';
 
-const ctx: RuleContext = { specimen: signatureOf(1, 0), ...DEFAULT_RULES };
+const ctx: RuleContext = { specimen: [signatureOf(1, 0)], ...DEFAULT_RULES };
 
 function make(modelId: string, jour: number, seed: number) {
   let n = 0;

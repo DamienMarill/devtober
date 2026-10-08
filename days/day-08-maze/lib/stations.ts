@@ -26,12 +26,12 @@ import {
   template: `
     <svg viewBox="0 0 1280 720" width="1280" height="720" aria-hidden="true">
       <!-- L'horloge murale. -->
-      <g [attr.transform]="'translate(' + (R.horloge.x + 46) + ' ' + (R.horloge.y + 46) + ')'">
-        <circle r="44" fill="#efe9da" stroke="#3d3a33" stroke-width="5" />
+      <g [attr.transform]="'translate(' + (R.horloge.x + 40) + ' ' + (R.horloge.y + 40) + ')'">
+        <circle r="38" fill="#efe9da" stroke="#3d3a33" stroke-width="5" />
         @for (i of twelve; track i) {
           <line
-            y1="-38"
-            y2="-33"
+            y1="-32"
+            y2="-27"
             stroke="#3d3a33"
             stroke-width="2"
             [attr.transform]="'rotate(' + i * 30 + ')'"
@@ -39,7 +39,7 @@ import {
         }
         <line
           y1="4"
-          y2="-22"
+          y2="-19"
           stroke="#24221f"
           stroke-width="4"
           stroke-linecap="round"
@@ -47,7 +47,7 @@ import {
         />
         <line
           y1="6"
-          y2="-33"
+          y2="-28"
           stroke="#24221f"
           stroke-width="2.4"
           stroke-linecap="round"
@@ -66,36 +66,36 @@ import {
           stroke="#6b4a2c"
           stroke-width="4"
         />
-        <rect x="10" y="10" width="112" height="88" fill="#efe9da" transform="rotate(-2 66 54)" />
-        <text x="18" y="26" class="memo-t" transform="rotate(-2 66 54)">NOTE DE SERVICE</text>
-        <text x="18" y="38" class="memo-t" transform="rotate(-2 66 54)">n° {{ note() }}</text>
+        <rect x="8" y="8" width="106" height="72" fill="#efe9da" transform="rotate(-2 60 44)" />
+        <text x="14" y="22" class="memo-t" transform="rotate(-2 60 44)">NOTE DE SERVICE</text>
+        <text x="14" y="33" class="memo-t" transform="rotate(-2 60 44)">n° {{ note() }}</text>
         @for (i of [0, 1, 2, 3, 4]; track i) {
           <line
-            x1="18"
-            [attr.x2]="104 - (i % 2) * 18"
-            [attr.y1]="50 + i * 9"
-            [attr.y2]="50 + i * 9"
+            x1="14"
+            [attr.x2]="100 - (i % 2) * 18"
+            [attr.y1]="44 + i * 7"
+            [attr.y2]="44 + i * 7"
             stroke="#8a8070"
-            transform="rotate(-2 66 54)"
+            transform="rotate(-2 60 44)"
           />
         }
-        <rect x="134" y="14" width="76" height="80" fill="#f3efe2" transform="rotate(3 172 54)" />
-        <text x="140" y="28" class="memo-t" transform="rotate(3 172 54)">RÈGLES</text>
+        <rect x="124" y="10" width="74" height="68" fill="#f3efe2" transform="rotate(3 160 44)" />
+        <text x="130" y="24" class="memo-t" transform="rotate(3 160 44)">RÈGLES</text>
         @for (i of rulesLines(); track i) {
           <line
-            x1="140"
-            x2="200"
-            [attr.y1]="38 + i * 9"
-            [attr.y2]="38 + i * 9"
+            x1="130"
+            x2="190"
+            [attr.y1]="32 + i * 7"
+            [attr.y2]="32 + i * 7"
             stroke="#8a8070"
-            transform="rotate(3 172 54)"
+            transform="rotate(3 160 44)"
           />
         }
-        <rect x="218" y="22" width="44" height="40" fill="#f1e27a" transform="rotate(-6 240 42)" />
-        <circle cx="66" cy="14" r="4" fill="#b3261e" />
-        <circle cx="172" cy="16" r="4" fill="#1f4fa3" />
-        <circle cx="240" cy="24" r="3.5" fill="#2e7d32" />
-        <text [attr.x]="R.memo.w / 2" [attr.y]="R.memo.h + 12" text-anchor="middle" class="hint">
+        <rect x="206" y="18" width="38" height="34" fill="#f1e27a" transform="rotate(-6 225 35)" />
+        <circle cx="60" cy="10" r="4" fill="#b3261e" />
+        <circle cx="160" cy="12" r="4" fill="#1f4fa3" />
+        <circle cx="225" cy="20" r="3.5" fill="#2e7d32" />
+        <text [attr.x]="R.memo.w / 2" [attr.y]="R.memo.h + 11" text-anchor="middle" class="hint">
           mémo : survoler pour lire
         </text>
       </g>
@@ -106,10 +106,10 @@ import {
           @if (item.id === 'loupe') {
             <g
               [attr.transform]="
-                'translate(' + (item.rect.x + 22) + ' ' + (item.rect.y + 34) + ') rotate(18)'
+                'translate(' + (item.rect.x + 16) + ' ' + (item.rect.y + 26) + ') rotate(18)'
               "
             >
-              <rect x="-4" y="16" width="8" height="66" rx="3" fill="#2d2a25" />
+              <rect x="-4" y="16" width="8" height="60" rx="3" fill="#2d2a25" />
               <circle r="18" fill="#cfe0e8" fill-opacity="0.5" stroke="#5b5d60" stroke-width="5" />
             </g>
           } @else {
@@ -118,13 +118,13 @@ import {
                 'translate(' +
                 (item.rect.x + 16) +
                 ' ' +
-                (item.rect.y + 6) +
+                (item.rect.y + 2) +
                 ') rotate(' +
                 (item.id === 'bleu' ? -6 : 5) +
                 ')'
               "
             >
-              <rect x="-5" y="0" width="10" height="108" rx="4" fill="#ece6d8" stroke="#8c8270" />
+              <rect x="-5" y="0" width="10" height="100" rx="4" fill="#ece6d8" stroke="#8c8270" />
               <rect
                 x="-5"
                 y="0"
@@ -138,14 +138,6 @@ import {
           }
         </g>
       }
-      <text
-        [attr.x]="R.pot.x + R.pot.w / 2"
-        [attr.y]="R.pot.y + R.pot.h + 2"
-        text-anchor="middle"
-        class="hint"
-      >
-        pot à crayons
-      </text>
 
       <!-- Le carrousel de tampons. -->
       @for (id of stampIds; track id) {
@@ -153,37 +145,37 @@ import {
         <g [class.absent]="inHand(id)" [class.hot]="hover() === 'tampon'">
           <ellipse
             [attr.cx]="slot.x + slot.w / 2"
-            [attr.cy]="slot.y + 16"
-            rx="15"
-            ry="13"
+            [attr.cy]="slot.y + 19"
+            rx="17"
+            ry="14"
             fill="#2b1f15"
           />
           <ellipse
             [attr.cx]="slot.x + slot.w / 2"
-            [attr.cy]="slot.y + 13"
-            rx="13"
-            ry="11"
+            [attr.cy]="slot.y + 16"
+            rx="15"
+            ry="12"
             fill="#7a4b2a"
           />
           <rect
             [attr.x]="slot.x + slot.w / 2 - 5"
-            [attr.y]="slot.y + 24"
+            [attr.y]="slot.y + 28"
             width="10"
             height="20"
             fill="#5a3a20"
           />
           <rect
             [attr.x]="slot.x + 2"
-            [attr.y]="slot.y + 44"
+            [attr.y]="slot.y + 48"
             [attr.width]="slot.w - 4"
-            height="26"
+            height="32"
             rx="3"
             fill="#c9c2b0"
             stroke="#3a3530"
           />
           <text
             [attr.x]="slot.x + slot.w / 2"
-            [attr.y]="slot.y + 61"
+            [attr.y]="slot.y + 69"
             text-anchor="middle"
             class="manche"
             [attr.textLength]="
@@ -195,9 +187,9 @@ import {
           </text>
           @for (k of [0, 1, 2]; track k) {
             <circle
-              [attr.cx]="slot.x + slot.w / 2 - 8 + k * 8"
-              [attr.cy]="slot.y + 75"
-              r="2.4"
+              [attr.cx]="slot.x + slot.w / 2 - 10 + k * 10"
+              [attr.cy]="slot.y + 93"
+              r="3.2"
               [attr.fill]="k < charges(id) ? inkOf(id) : 'none'"
               [attr.stroke]="inkOf(id)"
             />
@@ -226,7 +218,6 @@ import {
           opacity="0.92"
         />
       }
-      <text x="482" y="711" text-anchor="middle" class="hint clair">encreur</text>
 
       <!-- Le dateur : trois molettes (jour, mois, année). -->
       @for (i of [0, 1, 2]; track i) {
@@ -240,13 +231,10 @@ import {
           [attr.fill]="dateurActif() ? '#d8d0b8' : '#9d9682'"
           stroke="#3a3530"
         />
-        <text [attr.x]="w.x + w.w / 2" [attr.y]="w.y + 28" text-anchor="middle" class="molette">
+        <text [attr.x]="w.x + w.w / 2" [attr.y]="w.y + 33" text-anchor="middle" class="molette">
           {{ digits()[i] }}
         </text>
       }
-      <text x="649" y="711" text-anchor="middle" class="hint clair">
-        dateur REÇU LE {{ dateurActif() ? '(clic +1, clic droit −1)' : '(réglé par le service)' }}
-      </text>
 
       <!-- Le compteur mécanique du score. -->
       <g [attr.transform]="'translate(' + R.compteur.x + ' ' + R.compteur.y + ')'">
@@ -259,10 +247,10 @@ import {
           stroke-width="2"
         />
         @for (d of scoreDigits(); track $index) {
-          <rect [attr.x]="10 + $index * 26" y="9" width="22" height="34" rx="2" fill="#ece6d8" />
+          <rect [attr.x]="8 + $index * 26" y="6" width="22" height="34" rx="2" fill="#ece6d8" />
           <text
-            [attr.x]="21 + $index * 26"
-            y="35"
+            [attr.x]="19 + $index * 26"
+            y="32"
             text-anchor="middle"
             class="rouleau"
             [class.neg]="score() < 0"
@@ -270,7 +258,7 @@ import {
             {{ d }}
           </text>
         }
-        <text [attr.x]="R.compteur.w / 2" y="52" text-anchor="middle" class="hint clair">
+        <text [attr.x]="R.compteur.w / 2" y="50" text-anchor="middle" class="hint clair">
           points
         </text>
       </g>
@@ -284,14 +272,14 @@ import {
           fill="#efe9da"
           stroke="#8c8270"
         />
-        <rect [attr.width]="R.calendrier.w" height="16" rx="3" fill="#b3261e" />
-        <text [attr.x]="R.calendrier.w / 2" y="12" text-anchor="middle" class="eph-t">
+        <rect [attr.width]="R.calendrier.w" height="15" rx="3" fill="#b3261e" />
+        <text [attr.x]="R.calendrier.w / 2" y="11.5" text-anchor="middle" class="eph-t">
           {{ dayName() }}
         </text>
-        <text [attr.x]="R.calendrier.w / 2" y="48" text-anchor="middle" class="eph">
+        <text [attr.x]="R.calendrier.w / 2" y="41" text-anchor="middle" class="eph">
           {{ dayNum() }}
         </text>
-        <text [attr.x]="R.calendrier.w / 2" y="62" text-anchor="middle" class="eph-t sombre">
+        <text [attr.x]="R.calendrier.w / 2" y="51" text-anchor="middle" class="eph-t sombre">
           OCTOBRE 2026
         </text>
       </g>
@@ -315,7 +303,7 @@ import {
     }
     .hint {
       font:
-        9px 'Barlow Condensed',
+        11px 'Barlow Condensed',
         sans-serif;
       fill: #3a332a;
       letter-spacing: 0.04em;
@@ -326,19 +314,19 @@ import {
     }
     .memo-t {
       font:
-        8px 'Special Elite',
+        7.5px 'Special Elite',
         monospace;
       fill: #2d2a25;
     }
     .manche {
       font:
-        8.5px 'Allerta Stencil',
+        11px 'Allerta Stencil',
         sans-serif;
       fill: #24221f;
     }
     .molette {
       font:
-        20px 'Special Elite',
+        22px 'Special Elite',
         monospace;
       fill: #5b3a8c;
     }
@@ -353,13 +341,13 @@ import {
     }
     .eph {
       font:
-        700 32px 'Barlow Condensed',
+        700 26px 'Barlow Condensed',
         sans-serif;
       fill: #24221f;
     }
     .eph-t {
       font:
-        700 9px 'Barlow Condensed',
+        700 8.5px 'Barlow Condensed',
         sans-serif;
       fill: #f3ede0;
       letter-spacing: 0.12em;

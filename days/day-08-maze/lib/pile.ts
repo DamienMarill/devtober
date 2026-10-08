@@ -63,7 +63,7 @@ export interface Slab {
       left: 0;
       right: 0;
       top: 0;
-      bottom: 72px;
+      bottom: 108px;
       transform-origin: 50% 100%;
     }
     .penche {
@@ -79,8 +79,8 @@ export interface Slab {
     }
     .chemise {
       position: absolute;
-      left: calc(46px + var(--dx));
-      width: 170px;
+      left: calc(34px + var(--dx));
+      width: 154px;
       border-radius: 3px 5px 4px 3px;
       box-shadow:
         inset 0 -3px 0 rgba(0, 0, 0, 0.18),
@@ -109,7 +109,7 @@ export interface Slab {
       background: #f3ede0;
       color: #2d2a25;
       font:
-        600 10px/14px 'Barlow Condensed',
+        600 12px/16px 'Barlow Condensed',
         sans-serif;
       border-radius: 2px;
       white-space: nowrap;
@@ -118,7 +118,7 @@ export interface Slab {
       position: absolute;
       top: 0;
       bottom: 0;
-      right: 46px;
+      right: 40px;
       width: 9px;
       background: #c0261e;
       box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);

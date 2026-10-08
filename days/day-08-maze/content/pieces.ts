@@ -18,18 +18,15 @@ export const PIECES: Record<string, PieceDef> = {
       {
         t: 'texte',
         texte:
-          "L'agent soussigné prend son poste ce jour, {date}. Il s'engage à traiter tout dossier qui lui sera présenté, dans l'ordre où il lui sera présenté, y compris ceux qui ne lui seront pas présentés.",
+          "L'agent soussigné prend son poste ce jour, {date}. Il traitera tout dossier présenté, y compris ceux qui ne le seront pas.",
       },
       {
         t: 'case',
         id: 'reglement',
         label: "J'ai pris connaissance du règlement intérieur (642 pages, hors annexes).",
       },
-      {
-        t: 'pied',
-        signature: { id: 'signature', label: "Signature de l'agent" },
-        cachet: { id: 'cachet', label: 'Cachet : VU' },
-      },
+      { t: 'signature', id: 'signature', label: "Signature de l'agent" },
+      { t: 'cachet', id: 'cachet', label: 'Cachet : VU' },
     ],
   },
 

@@ -6,7 +6,7 @@ import { noteFor, releve } from './score';
 import { applyAction, solve } from './solve';
 import { signatureOf } from './signature-samples';
 
-const specimen = signatureOf(1, 0);
+const specimen = [signatureOf(1, 0)];
 
 /** Traite le dossier ouvert : tous les gestes du solveur sauf ceux que `skip` écarte, puis fermer et transmettre. */
 function processCurrent(b: Bureau, skip: (i: number) => boolean = () => false): string[] {

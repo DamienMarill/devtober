@@ -2,8 +2,14 @@ import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import type { HelpLine } from './desk';
 import type { Face, LaidBloc, Piece, Print, Stroke } from './model';
+import { MOTIF, TYPO } from './layout';
 import { STAMP_LABEL } from './rules';
 import { INK_COLOR, PRINT_SIZE } from './scene';
+
+/** Les corps et interlignes de TYPO en variables CSS (`--fs-texte`, `--lh-texte`…). */
+const TYPO_VARS = Object.entries(TYPO)
+  .map(([k, t]) => `--fs-${k}:${t.size}px;--lh-${k}:${t.lh}px`)
+  .join(';');
 
 /** Le chemin SVG d'un trait de stylo. */
 export function strokePath(points: readonly { x: number; y: number }[]): string {
@@ -36,6 +42,7 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'paper',
+    '[style]': 'typoVars',
     '[style.width.px]': 'piece().w',
     '[style.height.px]': 'piece().h',
   },
@@ -100,10 +107,10 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
                   stroke-width="0.9"
                 />
                 @if (pr.stamp === 'RECU_LE') {
-                  <text y="-3" text-anchor="middle" stroke="none" class="lettres">REÇU LE</text>
-                  <text y="13" text-anchor="middle" stroke="none" class="date">{{ pr.date }}</text>
+                  <text y="-4" text-anchor="middle" stroke="none" class="lettres">REÇU LE</text>
+                  <text y="16" text-anchor="middle" stroke="none" class="date">{{ pr.date }}</text>
                 } @else {
-                  <text y="5.5" text-anchor="middle" stroke="none" class="lettres">
+                  <text y="6.5" text-anchor="middle" stroke="none" class="lettres">
                     {{ label(pr) }}
                   </text>
                 }
@@ -195,11 +202,14 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
           <svg
             class="b motif"
             [style]="pos(l)"
-            [attr.viewBox]="'0 0 ' + l.rect.w + ' ' + l.rect.h"
+            [attr.viewBox]="'0 0 ' + l.rect.w / motifScale + ' ' + l.rect.h / motifScale"
             aria-hidden="true"
           >
             <ng-container
-              *ngTemplateOutlet="motif; context: { $implicit: b, w: l.rect.w, h: l.rect.h }"
+              *ngTemplateOutlet="
+                motif;
+                context: { $implicit: b, w: l.rect.w / motifScale, h: l.rect.h / motifScale }
+              "
             />
           </svg>
         }
@@ -332,6 +342,7 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
       display: block;
       perspective: 900px;
     }
+    /* Les corps et interlignes viennent de TYPO (layout.ts), comme la mise en page : rendu et règles concordent. */
     .flip {
       position: absolute;
       inset: 0;
@@ -353,7 +364,7 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
         0 6px 14px -6px rgba(20, 14, 6, 0.55);
       overflow: hidden;
       background-image: linear-gradient(transparent 96%, rgba(80, 60, 30, 0.04) 96%);
-      background-size: 100% 13px;
+      background-size: 100% var(--lh-texte);
     }
     .face.verso {
       transform: rotateY(180deg);
@@ -380,30 +391,30 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
       position: absolute;
       margin: 0;
       overflow: hidden;
-      font-size: 9.5px;
-      line-height: 11.5px;
+      font-size: var(--fs-texte);
+      line-height: var(--lh-texte);
     }
     .titre {
-      font-size: 11px;
-      line-height: 13px;
+      font-size: var(--fs-titre);
+      line-height: var(--lh-titre);
       font-weight: 700;
       letter-spacing: 0.02em;
     }
     .meta {
-      font-size: 8.5px;
-      line-height: 10.5px;
+      font-size: var(--fs-meta);
+      line-height: var(--lh-meta);
       color: #5b554b;
     }
     .texte[data-style='manuscrit'] {
       font-family: Caveat, cursive;
-      font-size: 12px;
-      line-height: 13px;
+      font-size: var(--fs-manuscrit);
+      line-height: var(--lh-manuscrit);
       color: #1f3f86;
     }
     .texte[data-style='machine'] {
       font-family: 'Special Elite', monospace;
-      font-size: 8.5px;
-      line-height: 11px;
+      font-size: var(--fs-machine);
+      line-height: var(--lh-machine);
       white-space: pre-line;
     }
     .texte[data-style='gras'] {
@@ -411,8 +422,8 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
     }
     .texte[data-style='petit'],
     .petits {
-      font-size: 6px;
-      line-height: 7px;
+      font-size: var(--fs-petit);
+      line-height: var(--lh-petit);
       color: #4b463e;
     }
     .petits {
@@ -423,13 +434,13 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
       margin: 0;
     }
     .valeur {
-      line-height: 12.5px;
+      line-height: var(--lh-valeur);
     }
     .valeur span {
       color: #5b554b;
     }
     .ligne {
-      padding-left: 13px;
+      padding-left: 16px;
     }
     .ligne .num {
       position: absolute;
@@ -452,19 +463,19 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
     }
     .lbl {
       display: block;
-      font-size: 8px;
-      line-height: 10px;
+      font-size: var(--fs-label);
+      line-height: var(--lh-label);
       color: #5b554b;
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
     .saisie {
       display: block;
-      height: 17px;
+      height: 22px;
       border-bottom: 1px solid #7a7062;
       font-family: Caveat, cursive;
-      font-size: 15px;
-      line-height: 17px;
+      font-size: 19px;
+      line-height: 22px;
       color: #1f3f86;
       white-space: nowrap;
       background: rgba(255, 255, 255, 0.25);
@@ -479,8 +490,8 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
     }
     .caret {
       display: inline-block;
-      width: 1px;
-      height: 13px;
+      width: 1.5px;
+      height: 17px;
       background: #1f3f86;
       vertical-align: -2px;
       animation: blink 1s steps(1) infinite;
@@ -496,8 +507,8 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
     }
     .boite {
       flex: none;
-      width: 11px;
-      height: 11px;
+      width: 14px;
+      height: 14px;
       margin-top: 1px;
       border: 1px solid #3b362f;
       background: rgba(255, 255, 255, 0.4);
@@ -533,24 +544,24 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
       flex: 1;
     }
     .pied .cach {
-      width: 88px;
+      width: 108px;
       flex: none;
     }
     .paraphe .lbl {
-      font-size: 6px;
+      font-size: 7px;
     }
     .vierge {
       position: absolute;
       inset: auto 0 40% 0;
       text-align: center;
-      font-size: 8px;
+      font-size: 11px;
       color: #9a9080;
     }
     .filigrane {
       position: absolute;
       left: 8%;
       font:
-        700 26px/1 'Allerta Stencil',
+        700 32px/1 'Allerta Stencil',
         sans-serif;
       color: rgba(120, 110, 100, 0.22);
       transform: rotate(-22deg);
@@ -574,14 +585,14 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
     }
     .trait {
       fill: none;
-      stroke-width: 1.5;
+      stroke-width: 1.8;
       stroke-linecap: round;
       stroke-linejoin: round;
       animation: matte 800ms ease-out;
     }
     @keyframes matte {
       from {
-        stroke-width: 2.1;
+        stroke-width: 2.5;
         filter: brightness(1.6);
       }
     }
@@ -595,13 +606,13 @@ function splashes(p: Print): { x: number; y: number; r: number }[] {
     }
     .lettres {
       font:
-        14px 'Allerta Stencil',
+        17px 'Allerta Stencil',
         sans-serif;
       letter-spacing: 1px;
     }
     .date {
       font:
-        12px 'Special Elite',
+        14px 'Special Elite',
         monospace;
     }
     .motif {
@@ -656,6 +667,8 @@ export class MazePaper {
   readonly focus = input<string | null>(null);
 
   protected readonly faces: Face[] = ['recto', 'verso'];
+  protected readonly motifScale = MOTIF;
+  protected readonly typoVars = TYPO_VARS;
   protected readonly ten = Array.from({ length: 10 }, (_, i) => i);
   protected readonly bars = Array.from({ length: 26 }, (_, i) => i);
 

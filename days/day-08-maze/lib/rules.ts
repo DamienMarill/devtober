@@ -1,14 +1,14 @@
 import { textOf } from './actions';
 import { CONFIG } from './config';
 import type { Dossier, Exigence, Field, Piece, Print, Pt, Rect, StampId, Stroke } from './model';
-import { similarity, strokesLength } from './signature';
+import { resemblance, strokesLength, type Specimen } from './signature';
 
 /**
  * La validation : une fonction pure par geste, qui prend l'état des pièces et rend `null` (conforme) ou un motif.
  * Les motifs vont tels quels sur les fiches de retour : « Ligne 2 : tampon hors cadre ».
  */
 export interface RuleContext {
-  specimen: Pt[][] | null;
+  specimen: Specimen | null;
   seuilSignature: number;
   toleranceTampon: number;
   toleranceRotation: number;
@@ -154,14 +154,14 @@ function checkSignature(
   const group = signatureGroup(piece, field);
   if (!group) return `signature absente (${field.label})`;
   const pts = group.flatMap((s) => s.points);
-  const zone = expand(field.rect, 4);
+  const zone = expand(field.rect, CONFIG.signature.marge);
   if (pts.filter((p) => inRect(p, zone)).length / pts.length < CONFIG.signature.dansCadre)
     return 'signature débordant du cadre';
   const strokes = group.map((s) => s.points);
   if (strokesLength(strokes) < CONFIG.signature.longueurMin) return 'signature trop courte';
   if (ex.encre && group.some((s) => s.ink !== ex.encre))
     return `signature à l'encre ${group[0].ink} au lieu de ${ex.encre}`;
-  if (ctx.specimen && similarity(strokes, ctx.specimen) < ctx.seuilSignature)
+  if (ctx.specimen && resemblance(strokes, ctx.specimen) < ctx.seuilSignature)
     return 'signature non conforme au spécimen';
   if (ex.sens === 'rtl') {
     const first = group[0].points[0];

@@ -3,7 +3,8 @@ import type { Pt } from './model';
 
 /**
  * Reconnaissance de signature : l'algorithme $P+ (Vatavu, 2017), variante de $P. Les traits sont concaténés en
- * un nuage de points, rééchantillonné, normalisé en taille et en position ; chaque point porte en plus l'angle
+ * un nuage de points, rééchantillonné, normalisé en position et en taille (axe par axe, pour qu'une signature
+ * tassée dans un cadre étroit reste la même) ; chaque point porte en plus l'angle
  * de virage du tracé à cet endroit, ce qui distingue une écriture souple d'un zigzag. Le nuage ignore l'ordre et
  * le sens des traits : une signature tracée de droite à gauche ressemble autant qu'une autre.
  */
@@ -70,8 +71,12 @@ export function cloud(strokes: readonly Pt[][]): Cloud {
   const ys = pts.map((p) => p.y);
   const minX = Math.min(...xs);
   const minY = Math.min(...ys);
-  const size = Math.max(Math.max(...xs) - minX, Math.max(...ys) - minY) || 1;
-  const scaled = pts.map((p) => ({ x: (p.x - minX) / size, y: (p.y - minY) / size }));
+  const w = Math.max(...xs) - minX;
+  const h = Math.max(...ys) - minY;
+  // Axe par axe, mais sans gonfler un axe presque plat (un trait droit reste un trait).
+  const sx = Math.max(w, 0.15 * h) || 1;
+  const sy = Math.max(h, 0.15 * w) || 1;
+  const scaled = pts.map((p) => ({ x: (p.x - minX) / sx, y: (p.y - minY) / sy }));
   const cx = scaled.reduce((s, p) => s + p.x, 0) / n;
   const cy = scaled.reduce((s, p) => s + p.y, 0) / n;
   const c = scaled.map((p) => ({ x: p.x - cx, y: p.y - cy }));
@@ -114,18 +119,27 @@ export function similarity(a: readonly Pt[][], b: readonly Pt[][]): number {
   return Math.max(0, Math.min(1, 1 - d / CONFIG.signature.distanceNulle));
 }
 
+/** Le spécimen : les trois signatures déposées le lundi matin, la plus représentative en premier. */
+export type Specimen = Pt[][][];
+
+/** Ressemblance au spécimen : la meilleure des trois (on ne signe jamais deux fois pareil). */
+export function resemblance(strokes: readonly Pt[][], specimen: Specimen): number {
+  return Math.max(0, ...specimen.map((s) => similarity(strokes, s)));
+}
+
 /**
  * Le spécimen du lundi : trois signatures qui doivent se ressembler à `seuilSpecimen` au moins ; on retient la
  * plus proche des deux autres. Renvoie null si elles ne se ressemblent pas.
  */
 export function chooseSpecimen(
   samples: readonly Pt[][][],
-): { specimen: Pt[][]; scores: number[] } | null {
+): { specimen: Specimen; scores: number[] } | null {
   const s01 = similarity(samples[0], samples[1]);
   const s02 = similarity(samples[0], samples[2]);
   const s12 = similarity(samples[1], samples[2]);
   if (Math.min(s01, s02, s12) < CONFIG.signature.seuilSpecimen) return null;
   const scores = [s01 + s02, s01 + s12, s02 + s12];
   const best = scores.indexOf(Math.max(...scores));
-  return { specimen: samples[best].map((s) => s.map((p) => ({ ...p }))), scores };
+  const order = [best, ...[0, 1, 2].filter((i) => i !== best)];
+  return { specimen: order.map((i) => samples[i].map((s) => s.map((p) => ({ ...p })))), scores };
 }

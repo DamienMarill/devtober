@@ -44,7 +44,7 @@ export class Demo {
     const bureau = new Bureau({
       jour: 2,
       seed: DEMO.seed,
-      specimen: signatureOf(5, 0),
+      specimen: [signatureOf(5, 0)],
       intervalle: DEMO.intervalle,
     });
     bureau.commencerA(DEMO.start);
@@ -137,7 +137,7 @@ export class Demo {
 
   private *take(): Generator<Cmd, void> {
     const top = PILE.base - this.bureau.hauteur() * PILE.unit + 14;
-    yield* this.click({ x: 130, y: Math.max(200, top) }, 0.4);
+    yield* this.click({ x: PILE.x + PILE.w / 2, y: Math.max(200, top) }, 0.4);
     yield { k: 'wait', s: 0.35 };
   }
 

@@ -5,39 +5,39 @@ import type { Ink, Piece, Pt, Rect, StampId } from './model';
  * travail au centre, la sortie à droite. La souris suit le trajet du dossier.
  */
 export const R = {
-  mur: { x: 0, y: 0, w: 1280, h: 132 },
-  horloge: { x: 140, y: 20, w: 92, h: 92 },
-  memo: { x: 336, y: 14, w: 262, h: 108 },
-  fenetre: { x: 622, y: 16, w: 220, h: 104 },
-  porte: { x: 1074, y: 6, w: 160, h: 126 },
-  tube: { x: 44, y: 134, w: 76, h: 30 },
-  pile: { x: 26, y: 176, w: 210, h: 474 },
-  corbeille: { x: 40, y: 658, w: 176, h: 58 },
-  sousmain: { x: 256, y: 150, w: 670, h: 414 },
-  chemise: { x: 262, y: 156, w: 236, h: 402 },
-  rabat: { x: 300, y: 540, w: 160, h: 24 },
-  pot: { x: 256, y: 578, w: 132, h: 136 },
-  tampons: { x: 400, y: 576, w: 338, h: 138 },
-  compteur: { x: 752, y: 584, w: 172, h: 54 },
-  calendrier: { x: 770, y: 644, w: 136, h: 68 },
-  sortant: { x: 970, y: 152, w: 290, h: 156 },
-  archives: { x: 970, y: 560, w: 290, h: 152 },
-  deco: { x: 970, y: 320, w: 290, h: 230 },
+  mur: { x: 0, y: 0, w: 1280, h: 104 },
+  horloge: { x: 148, y: 12, w: 80, h: 80 },
+  memo: { x: 318, y: 8, w: 252, h: 88 },
+  fenetre: { x: 604, y: 10, w: 206, h: 84 },
+  porte: { x: 1104, y: 2, w: 150, h: 102 },
+  tube: { x: 40, y: 106, w: 76, h: 26 },
+  pile: { x: 18, y: 146, w: 186, h: 466 },
+  corbeille: { x: 26, y: 626, w: 172, h: 88 },
+  sousmain: { x: 212, y: 112, w: 806, h: 486 },
+  chemise: { x: 218, y: 118, w: 300, h: 452 },
+  rabat: { x: 288, y: 570, w: 160, h: 26 },
+  pot: { x: 212, y: 604, w: 112, h: 112 },
+  tampons: { x: 332, y: 604, w: 510, h: 112 },
+  compteur: { x: 850, y: 606, w: 168, h: 52 },
+  calendrier: { x: 870, y: 662, w: 128, h: 54 },
+  sortant: { x: 1030, y: 112, w: 240, h: 150 },
+  archives: { x: 1030, y: 478, w: 240, h: 238 },
+  deco: { x: 1030, y: 270, w: 240, h: 200 },
   // Vue Archives (en surimpression).
   onglet: { x: 430, y: 662, w: 420, h: 58 },
   poignee: { x: 560, y: 4, w: 160, h: 40 },
 } as const satisfies Record<string, Rect>;
 
 /** Hauteur d'une unité d'épaisseur dans la pile, et la base de la pile. */
-export const PILE = { base: 648, unit: 38, x: 46, w: 170 };
+export const PILE = { base: 612, unit: 36, x: 34, w: 154 };
 
 /** Le dossier fermé, posé au centre du sous-main. */
-export const FOLDER = { w: 240, h: 168, x: 590, y: 352 };
+export const FOLDER = { w: 288, h: 200, x: 660, y: 350 };
 
 export const POT_ITEMS = [
-  { id: 'bleu', rect: { x: 268, y: 584, w: 32, h: 124 } },
-  { id: 'rouge', rect: { x: 304, y: 584, w: 32, h: 124 } },
-  { id: 'loupe', rect: { x: 340, y: 590, w: 44, h: 118 } },
+  { id: 'bleu', rect: { x: 222, y: 608, w: 30, h: 104 } },
+  { id: 'rouge', rect: { x: 256, y: 608, w: 30, h: 104 } },
+  { id: 'loupe', rect: { x: 290, y: 612, w: 32, h: 100 } },
 ] as const;
 
 export const STAMP_ORDER: readonly StampId[] = [
@@ -52,7 +52,7 @@ export const STAMP_ORDER: readonly StampId[] = [
 /** Les poignées des tampons sur le carrousel. */
 export function stampSlot(id: StampId): Rect {
   const i = STAMP_ORDER.indexOf(id);
-  return { x: 408 + i * 54, y: 582, w: 50, h: 78 };
+  return { x: 338 + i * 57, y: 608, w: 53, h: 104 };
 }
 
 export const INKS: readonly Ink[] = ['noir', 'rouge', 'bleu', 'violet'];
@@ -64,22 +64,22 @@ export const INK_COLOR: Record<Ink, string> = {
 };
 
 export function inkWell(ink: Ink): Rect {
-  return { x: 408 + INKS.indexOf(ink) * 38, y: 666, w: 34, h: 42 };
+  return { x: 690 + INKS.indexOf(ink) * 38, y: 608, w: 34, h: 48 };
 }
 
 /** Les trois molettes du dateur (jour, mois, année). */
 export function daterWheel(i: 0 | 1 | 2): Rect {
-  return { x: 568 + [0, 40, 80][i], y: 666, w: i === 2 ? 82 : 36, h: 42 };
+  return { x: 690 + [0, 38, 76][i], y: 662, w: i === 2 ? 76 : 34, h: 50 };
 }
 
 /** Taille d'une empreinte selon le tampon. */
 export const PRINT_SIZE: Record<StampId, { w: number; h: number }> = {
-  VU: { w: 58, h: 34 },
-  CONFORME: { w: 96, h: 32 },
-  APPROUVE: { w: 96, h: 32 },
-  IRRECEVABLE: { w: 116, h: 32 },
-  ANNULE: { w: 92, h: 32 },
-  RECU_LE: { w: 96, h: 44 },
+  VU: { w: 70, h: 40 },
+  CONFORME: { w: 118, h: 38 },
+  APPROUVE: { w: 118, h: 38 },
+  IRRECEVABLE: { w: 140, h: 38 },
+  ANNULE: { w: 112, h: 38 },
+  RECU_LE: { w: 118, h: 54 },
 };
 
 export const inside = (p: Pt, r: Rect) =>

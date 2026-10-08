@@ -27,8 +27,9 @@ import {
   stampSlot,
   toLocal,
   INKS,
+  toWorld,
 } from './scene';
-import { chooseSpecimen, strokesLength } from './signature';
+import { chooseSpecimen, strokesLength, type Specimen } from './signature';
 
 /**
  * Le bureau vu par la souris : un contrôleur sans DOM qui reçoit des gestes en coordonnées de scène (enfoncer,
@@ -169,10 +170,11 @@ export class Desk {
   specimen: SpecimenState | null = null;
   /** Ce que les gestes ont coûté, pour la calibration (export JSON depuis F3). */
   readonly journal: { t: number; geste: string; duree: number }[] = [];
-  onSpecimen: ((strokes: Pt[][]) => void) | null = null;
+  onSpecimen: ((specimen: Specimen) => void) | null = null;
 
   private readonly seq: Seq;
   private readonly local = new Map<string, Piece>();
+  private pendingSig: { piece: string; groupe: number; at: number } | null = null;
   private lastPenUp: {
     piece: string;
     face: Face;
@@ -268,6 +270,62 @@ export class Desk {
     this.anims = this.anims.filter((a) => this.clock - a.at < 3);
     if (this.specimen && this.specimen.until && this.clock >= this.specimen.until)
       this.resolveSpecimen();
+    const ps = this.pendingSig;
+    if (ps && !this.pen && this.clock >= ps.at) {
+      this.pendingSig = null;
+      this.signatureFeedback(ps.piece, ps.groupe);
+    }
+  }
+
+  /** Ce qui cloche dans la forme d'une signature (absente, hors du cadre, trop courte), ou null. */
+  private shapeFault(piece: Piece, field: Field): string | null {
+    const g = signatureGroup(piece, field);
+    if (!g) return 'signature absente';
+    const pts = g.flatMap((x) => x.points);
+    const inFrame =
+      pts.filter((pt) => inRect(pt, expand(field.rect, CONFIG.signature.marge))).length /
+      pts.length;
+    if (inFrame < CONFIG.signature.dansCadre) return 'signature débordant du cadre';
+    if (strokesLength(g.map((x) => x.points)) < CONFIG.signature.longueurMin)
+      return 'signature trop courte';
+    return null;
+  }
+
+  /** Un post-it qui dit pourquoi la signature qu'on vient de finir ne passe pas. */
+  private signatureFeedback(uid: string, groupe: number): void {
+    const piece = this.pieces.get(uid);
+    if (!piece) return;
+    // Le cadre visé : celui qui contient le centre du tracé, à 40 px près (même s'il déborde beaucoup).
+    const pts = piece.strokes.filter((st) => st.groupe === groupe).flatMap((st) => st.points);
+    if (!pts.length) return;
+    const c = {
+      x: pts.reduce((t, q) => t + q.x, 0) / pts.length,
+      y: pts.reduce((t, q) => t + q.y, 0) / pts.length,
+    };
+    const field = piece.fields.find((f) => f.kind === 'signature' && inRect(c, expand(f.rect, 40)));
+    if (!field) return;
+    const attached = signatureGroup(piece, field)?.some((st) => st.groupe === groupe);
+    const at = toWorld(piece, { x: field.rect.x + field.rect.w * 0.6, y: field.rect.y - 54 });
+    if (this.specimen && piece === this.specimen.sheet) {
+      const fault = attached ? this.shapeFault(piece, field) : 'signature débordant du cadre';
+      if (fault) this.postit(`${field.label} : ${fault}. Signez à nouveau dans le cadre.`, at, 4);
+      return;
+    }
+    const d = this.current();
+    const ex = d?.exigences.find(
+      (e) => e.geste === 'signer' && e.piece === uid && e.champ === field.id,
+    );
+    if (!d || !ex || !this.ctx) return;
+    const present = new Set(
+      [...this.pieces.values()]
+        .filter((p) => p.lieu === 'sousmain' || p.lieu === 'chemise')
+        .map((p) => p.uid),
+    );
+    const motif = attached
+      ? checkExigence(ex, d, this.pieces, this.ctx, present)
+      : 'signature débordant du cadre';
+    if (motif)
+      this.postit(`Refusée : ${motif.replace(/^(Ligne \d+|Pied de bordereau) : /, '')}.`, at, 4);
   }
 
   private onEvent(e: BureauEvent): void {
@@ -643,9 +701,17 @@ export class Desk {
       this.postit(refus, { x: 150, y: 240 });
       return;
     }
-    this.arrange(this.current()!);
+    const d = this.current()!;
+    this.arrange(d);
     this.sfx.paper();
     this.log('prendre');
+    if (d.tutoriel) {
+      this.postit(
+        'Trop petit pour lire ? Clic droit maintenu : la loupe. Ou celle du pot à crayons.',
+        { x: 520, y: 560 },
+        9,
+      );
+    }
   }
 
   /** Étale le dossier ouvert : le bordereau sur la chemise, les fiches de retour au-dessus, les pièces à droite. */
@@ -653,7 +719,7 @@ export class Desk {
     const pieces = this.pieces;
     const b = pieces.get(d.bordereau)!;
     b.x = R.chemise.x + R.chemise.w / 2;
-    b.y = R.chemise.y + 6 + b.h / 2;
+    b.y = R.chemise.y + 8 + b.h / 2;
     b.rot = rnd(-1, 1);
     b.z = ++this.z;
     // Les justificatifs dessous, les pièces à remplir (celles que vise le bordereau) dessus.
@@ -661,14 +727,15 @@ export class Desk {
     const others = d.contenu
       .filter((uid) => uid !== d.bordereau && !d.fiches.includes(uid))
       .sort((a, b) => Number(targets.has(a)) - Number(targets.has(b)));
+    // En éventail : chaque pièce laisse voir la bande du haut (et le titre) de celle d'en dessous.
     const slots = [
-      { x: 612, y: 290 },
-      { x: 706, y: 306 },
-      { x: 800, y: 292 },
-      { x: 650, y: 412 },
-      { x: 752, y: 424 },
-      { x: 832, y: 404 },
-      { x: 580, y: 360 },
+      { x: 652, y: 282 },
+      { x: 714, y: 318 },
+      { x: 776, y: 354 },
+      { x: 838, y: 390 },
+      { x: 880, y: 300 },
+      { x: 860, y: 430 },
+      { x: 620, y: 420 },
     ];
     others.forEach((uid, i) => {
       const p = pieces.get(uid)!;
@@ -680,8 +747,8 @@ export class Desk {
     });
     d.fiches.forEach((uid, i) => {
       const f = pieces.get(uid)!;
-      f.x = 470 + i * 10;
-      f.y = 236 + i * 12;
+      f.x = 600 + i * 12;
+      f.y = 218 + i * 12;
       f.rot = rnd(-4, 2);
       f.z = ++this.z;
     });
@@ -843,6 +910,14 @@ export class Desk {
     };
     this.lastPenUp = { piece: pen.piece, face: pen.face, t: this.clock, groupe: pen.groupe, box };
     this.log('trait');
+    // Le lundi (et au dépôt du spécimen), la signature finie est jugée tout de suite : le joueur apprend.
+    if (this.opts.aide || this.specimen) {
+      this.pendingSig = {
+        piece: pen.piece,
+        groupe: pen.groupe,
+        at: this.clock + CONFIG.signature.pauseMax + 0.1,
+      };
+    }
     if (this.specimen && piece === this.specimen.sheet) this.checkSpecimen();
   }
 
@@ -986,8 +1061,8 @@ export class Desk {
       { t: 'signature', id: 's3', label: 'Signature n° 3' },
     ]);
     sheet.lieu = 'sousmain';
-    sheet.x = 590;
-    sheet.y = 356;
+    sheet.x = 615;
+    sheet.y = 355;
     sheet.z = ++this.z;
     this.local.set(sheet.uid, sheet);
     this.specimen = { sheet, ok: [false, false, false], message: null, done: false, until: 0 };
@@ -995,16 +1070,7 @@ export class Desk {
 
   private checkSpecimen(): void {
     const s = this.specimen!;
-    s.ok = s.sheet.fields.map((f) => {
-      const g = signatureGroup(s.sheet, f);
-      if (!g) return false;
-      const pts = g.flatMap((x) => x.points);
-      const inFrame = pts.filter((pt) => inRect(pt, expand(f.rect, 4))).length / pts.length;
-      return (
-        inFrame >= CONFIG.signature.dansCadre &&
-        strokesLength(g.map((x) => x.points)) >= CONFIG.signature.longueurMin
-      );
-    });
+    s.ok = s.sheet.fields.map((f) => this.shapeFault(s.sheet, f) === null);
     if (s.ok.every(Boolean) && !s.until) s.until = this.clock + 0.7;
   }
 
@@ -1032,5 +1098,5 @@ export class Desk {
     this.sfx.stamp();
   }
 
-  private specimenStrokes: Pt[][] | null = null;
+  private specimenStrokes: Specimen | null = null;
 }

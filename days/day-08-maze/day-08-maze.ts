@@ -25,11 +25,12 @@ import { releve, type Releve } from './lib/score';
 import { MazeScreens, type Screen, type ScreenAction } from './lib/screens';
 import { MazeStations } from './lib/stations';
 import { STAMP_LABEL } from './lib/rules';
+import type { Specimen } from './lib/signature';
 
 const FONTS =
   'https://fonts.googleapis.com/css2?family=Allerta+Stencil&family=Barlow+Condensed:wght@400;600;700&family=Caveat:wght@400;600&family=Reenie+Beanie&family=Special+Elite&display=swap';
 const SAVE_KEY = 'devtober-08-guichet-7b';
-const LENS = { r: 90, zoom: 2.5 };
+const LENS = { r: 120, zoom: 2.2 };
 
 /** La campagne : ce qui survit d'une journée à l'autre (et dans la sauvegarde du navigateur). */
 interface Campaign {
@@ -37,7 +38,8 @@ interface Campaign {
   jour: number;
   seed: number;
   avertissements: number;
-  specimen: Pt[][] | null;
+  /** Les trois signatures déposées le lundi matin (la plus représentative en premier). */
+  specimen: Specimen | null;
   /** L'état au début de la journée en cours : la journée se rejoue à l'identique. */
   carry: Carry | null;
 }
@@ -158,7 +160,7 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
           <p class="specimen-msg" [class.ok]="d.specimen?.done">{{ m }}</p>
         }
         @if (mode() === 'specimen' && d.tool.k !== 'stylo') {
-          <p class="postit guide" style="left: 262px; top: 520px">
+          <p class="postit guide" style="left: 214px; top: 536px">
             Prenez un stylo dans le pot à crayons.
           </p>
         }
@@ -418,24 +420,24 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .chemise-ouverte {
       position: absolute;
-      left: 262px;
-      top: 156px;
-      width: 236px;
-      height: 390px;
+      left: 218px;
+      top: 118px;
+      width: 300px;
+      height: 452px;
       border-radius: 4px;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
     }
     .rabat {
       position: absolute;
-      left: 38px;
-      top: 384px;
+      left: 70px;
+      top: 452px;
       width: 160px;
-      height: 24px;
+      height: 26px;
       border-radius: 0 0 8px 8px;
       background: inherit;
       color: #2d2a25;
       font:
-        600 13px/24px 'Barlow Condensed',
+        600 15px/26px 'Barlow Condensed',
         sans-serif;
       text-align: center;
       box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
@@ -447,16 +449,16 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .folder {
       position: absolute;
-      width: 240px;
-      height: 168px;
+      width: 288px;
+      height: 200px;
       border-radius: 4px 10px 6px 4px;
       box-shadow:
         inset 0 -4px 0 rgba(0, 0, 0, 0.18),
         0 10px 18px rgba(0, 0, 0, 0.4);
     }
     .folder.envoi {
-      left: 995px;
-      top: 160px;
+      left: 1050px;
+      top: 120px;
       z-index: 5000;
       animation: envoi 0.9s ease-in forwards;
     }
@@ -470,12 +472,12 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
       position: absolute;
       left: 16px;
       top: 18px;
-      width: 160px;
+      width: 200px;
       padding: 6px 8px;
       background: #f3ede0;
       color: #2d2a25;
-      font-size: 11px;
-      line-height: 13px;
+      font-size: 13px;
+      line-height: 16px;
     }
     .etiquette p {
       margin: 0;
@@ -484,7 +486,7 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
       font-weight: 700;
     }
     .etiquette .objet {
-      font-size: 10px;
+      font-size: 12px;
       color: #5b554b;
     }
     .folder .ruban {
@@ -508,13 +510,13 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
       position: absolute;
       left: 16px;
       bottom: 10px;
-      font-size: 10px;
+      font-size: 12px;
       color: rgba(30, 28, 25, 0.75);
     }
     .capsule {
       position: absolute;
-      left: 66px;
-      top: 150px;
+      left: 58px;
+      top: 128px;
       width: 30px;
       height: 14px;
       border-radius: 7px;
@@ -533,8 +535,8 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .classe {
       position: absolute;
-      left: 30px;
-      top: 330px;
+      left: 24px;
+      top: 300px;
       padding: 6px 10px;
       border: 4px double #b3261e;
       color: #b3261e;
@@ -563,8 +565,8 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .delta {
       position: absolute;
-      left: 800px;
-      top: 560px;
+      left: 880px;
+      top: 586px;
       color: #2e7d32;
       font:
         700 22px 'Barlow Condensed',
@@ -584,13 +586,13 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .postit {
       position: absolute;
-      max-width: 200px;
+      max-width: 230px;
       margin: 0;
       padding: 8px 10px;
       background: #f6e58d;
       color: #2d2a25;
       font:
-        15px/1.15 Caveat,
+        18px/1.15 Caveat,
         cursive;
       box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3);
       transform: rotate(var(--r, -3deg));
@@ -600,7 +602,7 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     .postit.chef {
       background: #f8d7a6;
       font-family: 'Reenie Beanie', cursive;
-      font-size: 19px;
+      font-size: 22px;
       z-index: 120;
     }
     .postit.guide {
@@ -608,14 +610,14 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .specimen-msg {
       position: absolute;
-      left: 500px;
-      top: 498px;
-      width: 180px;
+      left: 742px;
+      top: 430px;
+      width: 230px;
       margin: 0;
       padding: 6px 8px;
       background: #f1cbc1;
       font:
-        15px 'Special Elite',
+        16px 'Special Elite',
         monospace;
       z-index: 5000;
     }
@@ -625,24 +627,24 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     .memo-zoom {
       position: absolute;
       left: 250px;
-      top: 70px;
+      top: 60px;
       display: flex;
       gap: 18px;
       z-index: 7000;
       pointer-events: none;
     }
     .memo-zoom > div {
-      width: 360px;
+      width: 400px;
       padding: 16px 20px;
       background: #efe9da;
       box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45);
       font:
-        13.5px/1.35 'Special Elite',
+        15px/1.4 'Special Elite',
         monospace;
       color: #24221f;
     }
     .memo-zoom .regles {
-      width: 300px;
+      width: 330px;
       background: #f3efe2;
       transform: rotate(1.5deg);
     }
@@ -678,7 +680,7 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
       background: #d8d0b8;
       color: #24221f;
       font:
-        600 15px 'Barlow Condensed',
+        600 17px 'Barlow Condensed',
         sans-serif;
       border-radius: 0 0 8px 8px;
       white-space: nowrap;
@@ -700,7 +702,7 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     .gerard {
       position: absolute;
       left: 1330px;
-      top: 470px;
+      top: 380px;
       width: 230px;
       height: 46px;
       border-radius: 22px 6px 6px 22px;
@@ -761,8 +763,8 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .loupe {
       position: absolute;
-      width: 180px;
-      height: 180px;
+      width: 240px;
+      height: 240px;
       border-radius: 50%;
       overflow: hidden;
       z-index: 9000;
@@ -810,13 +812,13 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     }
     .fantome text {
       font:
-        14px 'Allerta Stencil',
+        17px 'Allerta Stencil',
         sans-serif;
     }
     .demo-badge {
       position: absolute;
       left: 50%;
-      top: 140px;
+      top: 116px;
       transform: translateX(-50%);
       margin: 0;
       padding: 6px 14px;
@@ -841,7 +843,7 @@ type Mode = 'titre' | 'specimen' | 'jeu' | 'demo';
     .debug {
       position: absolute;
       right: 8px;
-      top: 140px;
+      top: 116px;
       margin: 0;
       padding: 8px 10px;
       background: rgba(10, 10, 10, 0.85);
@@ -1016,8 +1018,8 @@ export default class Day08Maze {
         date: DAYS[c.jour - 1].date,
       });
       desk.startSpecimen();
-      desk.onSpecimen = (strokes) => {
-        this.campaign.update((x) => ({ ...x, specimen: strokes }));
+      desk.onSpecimen = (specimen) => {
+        this.campaign.update((x) => ({ ...x, specimen }));
         this.startDay();
       };
       this.desk.set(desk);
@@ -1374,7 +1376,11 @@ export default class Day08Maze {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       const c = raw ? (JSON.parse(raw) as Campaign) : null;
-      return c?.v === 1 && c.jour >= 1 && c.jour <= DAYS.length ? c : null;
+      if (!c || c.v !== 1 || c.jour < 1 || c.jour > DAYS.length) return null;
+      // Les premières sauvegardes ne gardaient qu'une signature : on l'enveloppe.
+      if (c.specimen && !Array.isArray(c.specimen[0]?.[0]))
+        c.specimen = [c.specimen as unknown as Pt[][]];
+      return c;
     } catch {
       return null;
     }

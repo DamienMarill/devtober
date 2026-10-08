@@ -3,7 +3,7 @@ import { Seq, newStampTool, stamp, stroke, useStamp } from './actions';
 import { blankPiece } from './generate';
 import type { Field, Piece, Pt } from './model';
 import { checkStamp, DEFAULT_RULES, normalizeText, signatureGroup } from './rules';
-import { chooseSpecimen, similarity } from './signature';
+import { chooseSpecimen, resemblance, similarity } from './signature';
 import { signatureOf } from './signature-samples';
 import { fitStrokes, reversed } from './solve';
 
@@ -116,6 +116,15 @@ describe('signer', () => {
         );
       for (const fake of [zigzag, trait, gribouillis])
         expect(similarity(fake, signatureOf(m, 0))).toBeLessThan(DEFAULT_RULES.seuilSignature);
+    }
+  });
+
+  it('une signature tassée dans un cadre étroit ressemble toujours au spécimen', () => {
+    const specimen = [signatureOf(4, 1), signatureOf(4, 2), signatureOf(4, 3)];
+    for (let e = 4; e <= 9; e++) {
+      // Deux fois plus étroite, comme dans un petit cadre : seules les proportions changent.
+      const squeezed = signatureOf(4, e).map((s) => s.map((p) => ({ x: p.x * 0.45, y: p.y })));
+      expect(resemblance(squeezed, specimen)).toBeGreaterThanOrEqual(DEFAULT_RULES.seuilSignature);
     }
   });
 

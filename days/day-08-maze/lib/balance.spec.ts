@@ -30,7 +30,7 @@ describe('équilibrage', () => {
             {
               jour: day.numero,
               seed: 1000 + i,
-              specimen: signatureOf(1, 0),
+              specimen: [signatureOf(1, 0)],
               tutoriel: day.numero === 1,
             },
             profil,
