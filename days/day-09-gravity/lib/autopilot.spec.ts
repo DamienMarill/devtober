@@ -98,6 +98,46 @@ describe('l’apesanteur, c’est la chute libre', () => {
 });
 
 describe('le pilote de sécurité', () => {
+  /** Une parabole de l'automatique, mais dont la sortie démarre avec `late` secondes de retard. */
+  const lateParabola = (late: number) => {
+    const f = new Flight(undefined, undefined, 9);
+    let ap = new Autopilot();
+    ap.startParabola(f);
+    let waiting = -1;
+    let rescuedAt: number | null = null;
+    let lowest = Infinity;
+    for (let t = 0; t < 90; t += CONFIG.dt) {
+      if (rescuedAt === null && needsRescue(f)) {
+        rescuedAt = f.theta;
+        ap = new Autopilot('recover');
+        ap.loop = false;
+        waiting = -2;
+      }
+      const before = ap.phase;
+      if (waiting >= 0) {
+        // En retard : on reste en apesanteur, manche sur la portance nulle.
+        waiting += CONFIG.dt;
+        f.stick = f.stickForAlpha(CONFIG.aircraft.alpha0);
+        if (waiting >= late) waiting = -2;
+      } else ap.update(f, CONFIG.dt);
+      if (rescuedAt === null && before === 'zerog' && ap.phase === 'pullout' && waiting === -1)
+        waiting = 0;
+      f.step(CONFIG.dt);
+      lowest = Math.min(lowest, f.h);
+    }
+    return { rescued: rescuedAt !== null, lowest };
+  };
+
+  it('laisse de la marge : 4 s de retard à la sortie, et on garde la main', () => {
+    expect(lateParabola(4).rescued).toBe(false);
+  });
+
+  it('reprend la main sur un gros retard, et redresse au-dessus de la mer de nuages', () => {
+    const { rescued, lowest } = lateParabola(15);
+    expect(rescued).toBe(true);
+    expect(lowest).toBeGreaterThan(4600);
+  });
+
   it.each([
     ['manche tiré à fond', 1],
     ['manche poussé à fond', -1],
@@ -119,7 +159,7 @@ describe('le pilote de sécurité', () => {
       maxPitch = Math.max(maxPitch, f.theta);
     }
     expect(rescue?.done).toBe(true);
-    expect(maxPitch).toBeLessThan(62 * DEG);
+    expect(maxPitch).toBeLessThan(CONFIG.envelope.pitchMax + 2 * DEG);
     expect(lowest).toBeGreaterThan(4300);
   });
 });

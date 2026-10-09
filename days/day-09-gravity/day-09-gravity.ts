@@ -31,6 +31,8 @@ interface Readout {
   last: number;
   best: number;
   floating: boolean;
+  /** Au-delà de la vitesse maximale d'exploitation : l'alarme sonne, on garde la main. */
+  overspeed: boolean;
 }
 
 type Pilot = 'you' | 'auto' | 'rescue';
@@ -88,6 +90,14 @@ const fmt = (v: number, digits = 0) => {
           <dd>{{ fmt(view().speed) }} km/h</dd>
           <dt class="text-white/60">assiette</dt>
           <dd>{{ view().pitch > 0 ? '+' : '' }}{{ fmt(view().pitch) }}°</dd>
+          @if (view().overspeed) {
+            <dd
+              class="col-span-2 mt-1 animate-pulse rounded-full bg-[#ff5a6e] px-2 font-sans font-bold"
+              role="alert"
+            >
+              Survitesse : redresse !
+            </dd>
+          }
         </dl>
         @if (callout(); as c) {
           <div
@@ -147,17 +157,9 @@ const fmt = (v: number, digits = 0) => {
           </p>
           <canvas #chart class="chart h-14 w-full" aria-hidden="true"></canvas>
           <ol class="guide text-xs leading-relaxed text-white/70">
-            <li>
-              <b class="text-peach">▲ Pull up</b> : tire jusqu’à 1,8 g, garde-le jusqu’à 47°
-              d’assiette.
-            </li>
-            <li>
-              <b class="text-sakura">▼ Injection</b> : pousse jusqu’à 0 g (le repère rose du manche)
-              et tiens : l’avion est en chute libre, même en montant.
-            </li>
-            <li>
-              <b class="text-peach">▲ Pull out</b> : vers −42°, tire à nouveau pour sortir du piqué.
-            </li>
+            <li><b class="text-peach">▲ Pull up</b> : 1,8 g jusqu’à 47° d’assiette</li>
+            <li><b class="text-sakura">▼ Injection</b> : 0 g, le repère rose (on monte encore)</li>
+            <li><b class="text-peach">▲ Pull out</b> : vers −42°, redresse à 1,8 g</li>
           </ol>
           <p class="text-xs text-white/70 tabular-nums">
             Parabole {{ view().parabolas + 1 }} · apesanteur
@@ -255,11 +257,13 @@ const fmt = (v: number, digits = 0) => {
         flex-direction: column;
         align-items: stretch;
         justify-content: center;
+        overflow-y: auto;
       }
       .meter {
-        width: min(15cqw, 28cqh);
-        height: min(15cqw, 28cqh);
+        width: min(13cqw, 22cqh);
+        height: min(13cqw, 22cqh);
         align-self: center;
+        flex-shrink: 0;
       }
       .guide {
         display: block;
@@ -422,6 +426,7 @@ export default class Day09Gravity {
     last: 0,
     best: 0,
     floating: false,
+    overspeed: false,
   });
   protected readonly gColor = computed(() => {
     const n = this.view().nz;
@@ -593,6 +598,7 @@ export default class Day09Gravity {
       last: w.last,
       best: w.best,
       floating: Math.abs(f.nz) < CONFIG.phases.zero,
+      overspeed: f.V > CONFIG.envelope.vmo,
     });
     if (this.options.debug)
       this.debugLine.set(

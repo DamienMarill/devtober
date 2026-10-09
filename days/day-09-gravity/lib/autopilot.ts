@@ -1,5 +1,6 @@
+import { density } from './atmosphere';
 import { CONFIG, DEG, G0 } from './config';
-import { Flight } from './flight';
+import { Flight, gravity } from './flight';
 
 /**
  * Le pilote automatique vole la parabole des manuels : palier, ressource à 1,8 g jusqu'à 45° d'assiette,
@@ -125,17 +126,46 @@ export class Autopilot {
 }
 
 /**
- * Le pilote de sécurité : il reprend la main si l'avion descend trop bas, plonge trop vite sans redresser,
- * va trop vite ou trop lentement, ou prend une assiette de voltige (un A310 ne fait pas de looping).
+ * Ce qui arriverait si le commandant prenait la main maintenant : il tire jusqu'à `recoveryG` (ou ce que
+ * l'aile donne avant le décrochage), réacteurs au ralenti, et on intègre la trajectoire jusqu'à repasser à
+ * l'horizontale. On retient l'altitude la plus basse et la vitesse la plus haute.
+ */
+export function recoveryOutlook(f: Flight): { hMin: number; vMax: number } {
+  const A = CONFIG.aircraft;
+  const E = CONFIG.envelope;
+  let V = f.V;
+  let gamma = f.gamma;
+  let h = f.h;
+  let n = f.nz;
+  let hMin = h;
+  let vMax = V;
+  const dt = 0.05;
+  for (let t = 0; t < 40 && (gamma < 0 || t < 0.5); t += dt) {
+    const g = gravity(h);
+    const q = 0.5 * density(h) * V * V;
+    const nStall = (q * A.wingArea * f.clAlpha * (A.alphaStall - A.alpha0)) / (A.mass * g);
+    // Le temps de réagir et de tirer : le facteur de charge rejoint la cible en une seconde et demie environ.
+    n += (Math.min(E.recoveryG, nStall) - n) * Math.min(1, dt / 1.2);
+    const cl = (n * A.mass * g) / (q * A.wingArea);
+    const drag = q * A.wingArea * (A.cd0 + A.k * cl * cl);
+    V = Math.max(30, V + (-g * Math.sin(gamma) - drag / A.mass) * dt);
+    gamma += ((g * (n - Math.cos(gamma))) / V) * dt;
+    h += V * Math.sin(gamma) * dt;
+    hMin = Math.min(hMin, h);
+    vMax = Math.max(vMax, V);
+  }
+  return { hMin, vMax };
+}
+
+/**
+ * Le pilote de sécurité : il ne reprend la main qu'en dernier recours. Tant que sa propre ressource suffit
+ * encore à rester au-dessus de 4 600 m et sous la vitesse maximale, on a le droit d'être en retard. Il
+ * intervient aussi sur une assiette de voltige (un A310 ne fait pas de looping) ou une vitesse trop faible.
  */
 export function needsRescue(f: Flight): boolean {
   const E = CONFIG.envelope;
-  return (
-    (f.h < E.hFloor && f.gamma < 0) ||
-    (f.vs < E.vsMin && f.nz < 1.2) ||
-    f.V > E.vMax ||
-    f.V < E.vMin ||
-    f.theta > E.pitchMax ||
-    f.theta < E.pitchMin
-  );
+  if (f.V < E.vMin || f.theta > E.pitchMax || f.theta < E.pitchMin) return true;
+  if (f.gamma > -3 * DEG && f.V < E.vMax) return false;
+  const { hMin, vMax } = recoveryOutlook(f);
+  return hMin < E.hFloor || vMax > E.vMax;
 }

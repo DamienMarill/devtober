@@ -66,6 +66,10 @@ Ces réglages ont été choisis pour retrouver le profil ci-dessus, Novespace ne
 - la poussée est dans l'axe du fuselage ;
 - le mécanicien qui gère les gaz est parfait.
 
+## Le commandant et la vitesse maximale
+
+Le commandant ne reprend la main que s'il le faut vraiment. À chaque instant, il simule la ressource qu'il ferait lui-même : 2,3 g, réacteurs au ralenti, avec la traînée. Il n'intervient que si elle ne suffirait plus à rester au-dessus de 4 600 m (la mer de nuages est à 4 300 m) et sous 955 km/h, ou au-delà de ±65° d'assiette. Entre 900 et 955 km/h, une alarme de survitesse prévient sans prendre la main. 900 km/h, c'est à peu près la vitesse maximale d'exploitation d'un A310 (360 nœuds indiqués) à 6 000 m, en vitesse vraie. Résultat : on peut lancer la sortie 4 à 5 s après −42° en ne tirant que 1,8 g, et plus si on tire plus fort (tests « laisse de la marge » et « reprend la main sur un gros retard »).
+
 ## La cabine tourne
 
 Pendant l'apesanteur, l'avion bascule de +48° à −42° d'assiette. Au sommet, il tourne à environ 5°/s : sa trajectoire s'incurve de g·cos γ / V = 9,8 / 102 ≈ 0,096 rad/s. Un objet qui flotte garde son orientation dans l'espace. Vu de la cabine, il semble donc tourner, et il subit les forces d'inertie d'un repère tournant (centrifuge, Coriolis, Euler), de l'ordre du millième de g. [`lib/cabin.ts`](./lib/cabin.ts) les applique. Un test vérifie que, vu de l'extérieur, un objet libre file bien en ligne droite.

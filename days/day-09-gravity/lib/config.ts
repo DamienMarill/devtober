@@ -44,30 +44,40 @@ export const CONFIG = {
 
   /**
    * Le manche : la position s ∈ [−1, 1] commande l'incidence, autour de l'incidence de palier, par une loi
-   * progressive gain·(linear·s + (1 − linear)·s³) : 1,8 g vers s = 0,3 à la vitesse de croisière, et le
-   * décrochage en butée.
+   * progressive gain·(linear·s + (1 − linear)·s³) : douce au centre (1,8 g vers s = 0,4 à la vitesse de
+   * croisière, une pichenette vaut quelques millièmes de g), le décrochage en butée.
    */
   stick: {
     gain: 12.4 * DEG,
-    linear: 0.35,
-    /** Vitesse du manche quand on garde le bouton appuyé : lente au début (les petites retouches), puis plus vive. */
-    slow: 0.2,
-    fast: 0.5,
-    slowFor: 0.35,
+    linear: 0.25,
+    /**
+     * Vitesse du manche (unités par seconde) quand on garde le bouton appuyé : lente pendant `slowFor`
+     * secondes (les retouches), puis plus vive. Il faut environ 1,5 s pour passer de 1 à 1,8 g.
+     */
+    slow: 0.1,
+    fast: 0.3,
+    slowFor: 0.5,
   },
 
   /** Le domaine de vol : ce que le pilote de sécurité ne laisse pas dépasser. */
   envelope: {
+    /** Facteurs de charge limites d'un avion de ligne (CS-25 / 14 CFR 25.337). */
     nMax: 2.5,
     nMin: -1,
-    /** En dessous, ou au-delà, il reprend la main (vitesses en m/s, assiettes en radians). */
-    hFloor: 5000,
-    /** Taux de descente (m/s) au-delà duquel il faut déjà être en train de redresser. */
-    vsMin: -120,
-    vMax: 250,
-    vMin: 80,
-    pitchMax: 60 * DEG,
-    pitchMin: -55 * DEG,
+    /**
+     * Le commandant reprend la main si sa ressource à `recoveryG`, lancée maintenant, passerait sous
+     * `hFloor` (la mer de nuages est à 4 300 m) ou au-delà de `vMax` (m/s, 955 km/h : un peu au-dessus de
+     * la vitesse maximale d'exploitation, sous la vitesse de piqué de calcul).
+     */
+    recoveryG: 2.3,
+    hFloor: 4600,
+    vMax: 265,
+    /** Au-delà, l'alarme de survitesse sonne, mais on garde la main (VMO ≈ 900 km/h vraie à 6 000 m). */
+    vmo: 250,
+    /** Et sans attendre sous 230 km/h ou au-delà de ±65° d'assiette. */
+    vMin: 65,
+    pitchMax: 65 * DEG,
+    pitchMin: -65 * DEG,
   },
 
   /** Le palier de départ. */
