@@ -109,5 +109,19 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
       thumbnailFocus: 0.5,
     },
   },
+  9: {
+    component: () => import('./day-09-gravity/day-09-gravity').then((m) => m.default),
+    readme: () => import('./day-09-gravity/README.md').then((m) => m.default),
+    // La touche T lance la démo : le pilote automatique, déjà 9 s dans la ressource à 1,8 g. L'injection tombe
+    // vers 12 s, puis 18 s d'apesanteur ; la miniature montre les passagers en étoile et la trace rose.
+    capture: {
+      click: null,
+      key: 't',
+      seconds: 30,
+      settle: 2500,
+      thumbnailAt: 21,
+      thumbnailFocus: 0.1,
+    },
+  },
   // new-day:insert
 };
