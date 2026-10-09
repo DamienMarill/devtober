@@ -109,5 +109,10 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
       thumbnailFocus: 0.5,
     },
   },
+  9: {
+    component: () => import('./day-09-gravity/day-09-gravity').then((m) => m.default),
+    readme: () => import('./day-09-gravity/README.md').then((m) => m.default),
+    capture: { click: null, seconds: 10 },
+  },
   // new-day:insert
 };
