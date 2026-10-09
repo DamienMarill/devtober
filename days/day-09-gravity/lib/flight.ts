@@ -46,8 +46,9 @@ export class Flight {
   /** Facteurs de charge ressentis en cabine : normal (vers le plancher) et longitudinal (vers l'avant). */
   nz = 1;
   nx = 0;
-  /** Vitesse de tangage (rad/s). */
+  /** Vitesse de tangage (rad/s) et accélération de tangage (rad/s²). */
   pitchRate = 0;
+  pitchAccel = 0;
   /** Les protections ont rogné la commande (le manche demande plus que ce que l'avion accepte). */
   limited = false;
   lift = 0;
@@ -110,9 +111,27 @@ export class Flight {
     return A.alpha0 + (n * A.mass * gravity(this.h)) / (this.q * A.wingArea * this.clAlpha);
   }
 
-  /** La position du manche qui commande l'incidence `alpha`. */
+  /**
+   * L'incidence commandée par le manche : une loi progressive, douce autour du neutre (les petites
+   * retouches) et qui va jusqu'au décrochage en butée (la sortie de parabole, lente, en a besoin).
+   */
+  alphaForStick(s: number): number {
+    const { gain, linear } = CONFIG.stick;
+    return this.alphaRef + gain * (linear * s + (1 - linear) * s * s * s);
+  }
+
+  /** La position du manche qui commande l'incidence `alpha` (la loi inverse, par dichotomie). */
   stickForAlpha(alpha: number): number {
-    return (alpha - this.alphaRef) / CONFIG.stick.gain;
+    let lo = -1;
+    let hi = 1;
+    if (alpha <= this.alphaForStick(lo)) return lo;
+    if (alpha >= this.alphaForStick(hi)) return hi;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (this.alphaForStick(mid) < alpha) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
   }
 
   /** Avance d'un pas `dt`. */
@@ -122,7 +141,7 @@ export class Flight {
 
     // Le manche commande l'incidence ; les protections la bornent au facteur de charge permis et avant le
     // décrochage. Puis l'incidence suit la commande avec un peu de retard.
-    const wanted = this.alphaRef + this.stick * CONFIG.stick.gain;
+    const wanted = this.alphaForStick(this.stick);
     const hi = Math.min(this.alphaForN(E.nMax), A.alphaStall);
     const lo = this.alphaForN(E.nMin);
     const cmd = Math.max(lo, Math.min(hi, wanted));
@@ -142,7 +161,7 @@ export class Flight {
 
     // La poussée : le troisième pilote. Il anticipe sur le manche : dès que la portance commandée tombe, il
     // réduit pour compenser juste la traînée, et rien ne glisse vers l'avant ou l'arrière. Le reste du temps,
-    // il tient la vitesse de croisière, sans dépasser 0,1 g vers l'arrière dans la ressource.
+    // il tient la vitesse de croisière : plein gaz dans la ressource, ralenti dans le piqué.
     const sinA = Math.sin(this.alpha);
     const cosA = Math.cos(this.alpha);
     const tMax = thrustMax(this.h, this.mach);
@@ -152,10 +171,7 @@ export class Flight {
     const want =
       this.throttle === 'drag'
         ? D / cosA - 2.5 * A.mass * G0 * this.nx
-        : Math.min(
-            (D + 0.1 * A.mass * G0) / cosA,
-            D + A.mass * (g * Math.sin(this.gamma) + 0.35 * (CONFIG.cruise.speed - this.V)),
-          );
+        : D + A.mass * (g * Math.sin(this.gamma) + 0.35 * (CONFIG.cruise.speed - this.V));
     const target = Math.max(A.idle * tMax, Math.min(tMax, want));
     // Les réacteurs réduisent plus vite qu'ils n'accélèrent.
     const spool = target < this.thrust ? A.spool * 0.35 : A.spool;
@@ -171,7 +187,12 @@ export class Flight {
     this.h += this.V * Math.sin(this.gamma) * dt;
     this.x += this.V * Math.cos(this.gamma) * dt;
     this.t += dt;
-    this.pitchRate = (this.theta - theta0) / dt;
+    // La vitesse de tangage et sa dérivée, lissées : la cellule a de l'inertie en tangage, et la cabine s'en
+    // sert pour ses forces d'inertie de rotation.
+    const k = 1 - Math.exp(-dt / 0.4);
+    const rate = this.pitchRate + ((this.theta - theta0) / dt - this.pitchRate) * k;
+    this.pitchAccel += ((rate - this.pitchRate) / dt - this.pitchAccel) * k;
+    this.pitchRate = rate;
 
     // Ce que ressent la cabine : la force spécifique projetée sur les axes du fuselage.
     this.nx = (fAlong * cosA + fNormal * sinA) / G0;

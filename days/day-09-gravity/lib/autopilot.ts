@@ -50,6 +50,8 @@ export class Autopilot {
     this.phase = phase;
     this.timer = 0;
     this.from = from;
+    // La correction apprise pendant une phase ne vaut pas pour la suivante (autre vitesse, autre cible).
+    this.integ = 0;
   }
 
   /** Une rampe douce de `from` à `to` en `dur` secondes. */
@@ -89,14 +91,13 @@ export class Autopilot {
       }
       case 'pullup':
         n = this.ramp(P.pullUpG, 3.5);
-        if (f.theta >= P.injectAt) this.go('injection', f.nz);
+        // L'injection se lance un peu avant l'angle visé : la trajectoire continue de se cabrer pendant
+        // qu'on relâche, et la chute libre commence vers 47°.
+        if (f.gamma >= P.injectAt) this.go('injection', f.nz);
         break;
       case 'injection':
         n = this.ramp(0, 2.2);
-        if (this.timer >= 2.2) {
-          this.go('zerog', 0);
-          this.integ = 0;
-        }
+        if (this.timer >= 2.2) this.go('zerog', 0);
         break;
       case 'zerog':
         n = 0;
@@ -124,13 +125,14 @@ export class Autopilot {
 }
 
 /**
- * Le pilote de sécurité : il reprend la main si l'avion descend trop bas, va trop vite ou trop lentement, ou
- * prend une assiette de voltige (un A310 ne fait pas de looping).
+ * Le pilote de sécurité : il reprend la main si l'avion descend trop bas, plonge trop vite sans redresser,
+ * va trop vite ou trop lentement, ou prend une assiette de voltige (un A310 ne fait pas de looping).
  */
 export function needsRescue(f: Flight): boolean {
   const E = CONFIG.envelope;
   return (
     (f.h < E.hFloor && f.gamma < 0) ||
+    (f.vs < E.vsMin && f.nz < 1.2) ||
     f.V > E.vMax ||
     f.V < E.vMin ||
     f.theta > E.pitchMax ||

@@ -62,17 +62,24 @@ export class Cabin {
   /** L'accélération apparente dans la cabine (m/s²), dans ses axes. */
   ax = 0;
   ay = -G0;
+  /** Vitesse de tangage de l'avion et sa dérivée, et le centre de gravité (supposé au milieu, au plancher). */
+  q = 0;
+  qDot = 0;
+  private readonly pivotX: number;
+  private readonly pivotY = 0;
   grab: Grab | null = null;
   private nextId = 1;
   private readonly rng: Rng;
 
   constructor(
     readonly width = 7.6,
-    readonly height = 2.2,
+    /** 2,3 m : la hauteur de la zone d'expérience de l'A310 (guide ESA). */
+    readonly height = 2.3,
     seed = 9,
   ) {
     const rng = new Rng(seed);
     this.rng = rng;
+    this.pivotX = width / 2;
     // Trois passagers allongés au plancher, comme on le fait pendant la ressource.
     [1.25, 3.85, 6.35].forEach((x, i) =>
       this.add('person', x, 0.23, {
@@ -143,6 +150,17 @@ export class Cabin {
   }
 
   /**
+   * La rotation de l'avion : sa vitesse de tangage q (rad/s, positive nez en haut) et sa dérivée. Pendant la
+   * parabole, l'avion bascule de +47° à −42° autour de son centre de gravité ; un objet libre, lui, garde son
+   * orientation dans l'espace. Dans la cabine, ça se traduit par les forces d'inertie d'un repère tournant :
+   * centrifuge, Coriolis et Euler (de l'ordre du millième de g), et une rotation apparente des objets.
+   */
+  setRotation(q: number, qDot: number): void {
+    this.q = q;
+    this.qDot = qDot;
+  }
+
+  /**
    * À l'injection, les passagers décollent du plancher d'une petite poussée (et un peu de rotation) ; les
    * vibrations de l'avion font décoller le reste, plus doucement.
    */
@@ -160,9 +178,17 @@ export class Cabin {
     const h = dt / SUBSTEPS;
     for (const b of this.bodies) b.touching = false;
     for (let s = 0; s < SUBSTEPS; s++) {
+      const { q, qDot } = this;
       for (const b of this.bodies) {
-        b.vx += this.ax * h;
-        b.vy += this.ay * h;
+        // Repère tournant : centrifuge q²·r, Coriolis −2q×v, Euler −q̇×r ; et la rotation propre d'un objet
+        // libre se conserve dans l'espace, donc vue de la cabine elle varie de −q̇.
+        const rx = b.x - this.pivotX;
+        const ry = b.y - this.pivotY;
+        const vx = b.vx;
+        const vy = b.vy;
+        b.vx += (this.ax + q * q * rx + 2 * q * vy + qDot * ry) * h;
+        b.vy += (this.ay + q * q * ry - 2 * q * vx - qDot * rx) * h;
+        b.w -= qDot * h;
         const k = Math.exp(-DRAG * h);
         b.vx *= k;
         b.vy *= k;

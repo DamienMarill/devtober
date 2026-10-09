@@ -37,8 +37,8 @@ type Pilot = 'you' | 'auto' | 'rescue';
 
 const CALLOUTS: Record<Exclude<Callout, 'parabola'>, { title: string; sub: string }> = {
   'pull-up': { title: 'Pull up', sub: 'ressource : 1,8 g' },
-  injection: { title: 'Injection', sub: 'apesanteur' },
-  'pull-out': { title: 'Pull out', sub: 'sortie : 1,8 g' },
+  injection: { title: 'Injection', sub: 'chute libre… alors qu’on monte encore' },
+  'pull-out': { title: 'Pull out', sub: 'ressource de sortie' },
 };
 
 /** Nombre à la française ; pas de « -0,00 » quand on frôle zéro par en dessous. */
@@ -112,7 +112,7 @@ const fmt = (v: number, digits = 0) => {
           <p
             class="banner absolute bottom-3 left-1/2 w-max max-w-[92%] -translate-x-1/2 rounded-full bg-night-floor/70 px-4 py-1.5 text-center text-xs text-white/90 backdrop-blur"
           >
-            Garde <b>▲</b> pour cabrer à 1,8 g jusqu’à 45°, puis vise
+            Garde <b>▲</b> pour cabrer à 1,8 g jusqu’à 47°, puis vise
             <b class="text-sakura">0 g</b> avec <b>▼</b>. Ou <b>A</b> : pilote auto.
           </p>
         }
@@ -148,12 +148,12 @@ const fmt = (v: number, digits = 0) => {
           <canvas #chart class="chart h-14 w-full" aria-hidden="true"></canvas>
           <ol class="guide text-xs leading-relaxed text-white/70">
             <li>
-              <b class="text-peach">▲ Pull up</b> : tire jusqu’à 1,8 g, garde-le jusqu’à 45°
+              <b class="text-peach">▲ Pull up</b> : tire jusqu’à 1,8 g, garde-le jusqu’à 47°
               d’assiette.
             </li>
             <li>
-              <b class="text-sakura">▼ Injection</b> : pousse jusqu’à 0 g (le repère rose du
-              manche), et tiens.
+              <b class="text-sakura">▼ Injection</b> : pousse jusqu’à 0 g (le repère rose du manche)
+              et tiens : l’avion est en chute libre, même en montant.
             </li>
             <li>
               <b class="text-peach">▲ Pull out</b> : vers −42°, tire à nouveau pour sortir du piqué.
@@ -549,6 +549,7 @@ export default class Day09Gravity {
     this.track.record(f, dt);
     this.chart?.push(f.nz, dt);
     this.cabin.setLoad(f.nx, f.nz);
+    this.cabin.setRotation(f.pitchRate, f.pitchAccel);
     this.cabin.step(dt);
     this.lo = Math.min(this.lo, f.nz);
     this.hi = Math.max(this.hi, f.nz);

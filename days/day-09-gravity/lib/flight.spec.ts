@@ -12,6 +12,16 @@ describe('atmosphère et gravité', () => {
     expect(density(6000)).toBeCloseTo(0.66, 2);
   });
 
+  it('colle au modèle de troposphère de la NASA (Glenn Research Center) à 1 % près', () => {
+    // T = 15,04 − 0,00649·h (°C), p = 101,29·[(T + 273,1) / 288,08]^5,256 (kPa), ρ = p / (0,2869·(T + 273,1)).
+    for (const h of [0, 3000, 6000, 7500, 8500, 10_000]) {
+      const T = 15.04 - 0.00649 * h;
+      const p = 101.29 * ((T + 273.1) / 288.08) ** 5.256;
+      const rho = p / (0.2869 * (T + 273.1));
+      expect(Math.abs(density(h) / rho - 1)).toBeLessThan(0.01);
+    }
+  });
+
   it('fait baisser g avec l’altitude', () => {
     expect(gravity(0)).toBeCloseTo(9.80665, 5);
     expect(gravity(8500)).toBeLessThan(9.79);
