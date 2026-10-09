@@ -81,24 +81,6 @@ const fmt = (v: number, digits = 0) => {
         >
           Vol parabolique <span class="font-sans font-normal text-white/60">· A310 « 0 g »</span>
         </p>
-        <dl
-          class="hud absolute top-2 right-3 grid grid-cols-[auto_auto] gap-x-2 text-right font-mono text-xs text-white tabular-nums drop-shadow"
-        >
-          <dt class="text-white/60">altitude</dt>
-          <dd>{{ fmt(view().alt) }} m</dd>
-          <dt class="text-white/60">vitesse</dt>
-          <dd>{{ fmt(view().speed) }} km/h</dd>
-          <dt class="text-white/60">assiette</dt>
-          <dd>{{ view().pitch > 0 ? '+' : '' }}{{ fmt(view().pitch) }}°</dd>
-          @if (view().overspeed) {
-            <dd
-              class="col-span-2 mt-1 animate-pulse rounded-full bg-[#ff5a6e] px-2 font-sans font-bold"
-              role="alert"
-            >
-              Survitesse : redresse !
-            </dd>
-          }
-        </dl>
         @if (callout(); as c) {
           <div
             class="callout pointer-events-none absolute inset-x-0 top-[34%] text-center"
@@ -145,16 +127,41 @@ const fmt = (v: number, digits = 0) => {
       <section class="panel flex min-h-0 items-center gap-3 px-3 py-2">
         <canvas #meter class="meter shrink-0" aria-hidden="true"></canvas>
         <div class="flex min-w-0 flex-1 flex-col gap-1.5">
-          <p class="text-xs text-white/60">Force ressentie</p>
-          <p
-            class="font-display text-4xl leading-none font-extrabold tabular-nums"
-            [style.color]="gColor()"
-          >
-            {{ fmt(view().nz, 2) }}<span class="text-xl"> g</span>
-          </p>
-          <p class="text-xs text-white/70">
-            Passager de 70 kg : <b class="text-white tabular-nums">{{ fmt(70 * view().nz) }} kg</b>
-          </p>
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex flex-col gap-1.5">
+              <p class="text-xs text-white/60">Force ressentie</p>
+              <p
+                class="font-display text-4xl leading-none font-extrabold tabular-nums"
+                [style.color]="gColor()"
+              >
+                {{ fmt(view().nz, 2) }}<span class="text-xl"> g</span>
+              </p>
+              <p class="text-xs text-white/70">
+                Passager de 70 kg :
+                <b class="text-white tabular-nums">{{ fmt(70 * view().nz) }} kg</b>
+              </p>
+            </div>
+            <dl
+              class="grid grid-cols-[auto_auto] items-baseline gap-x-3 gap-y-0.5 text-right font-mono text-xs tabular-nums"
+            >
+              <dt class="font-sans text-white/60">altitude</dt>
+              <dd class="text-sm font-semibold text-white">{{ fmt(view().alt) }} m</dd>
+              <dt class="font-sans text-white/60">vitesse</dt>
+              <dd class="text-sm font-semibold text-white">{{ fmt(view().speed) }} km/h</dd>
+              <dt class="font-sans text-white/60">assiette</dt>
+              <dd class="text-sm font-semibold text-white">
+                {{ view().pitch > 0 ? '+' : '' }}{{ fmt(view().pitch) }}°
+              </dd>
+            </dl>
+          </div>
+          @if (view().overspeed) {
+            <p
+              class="animate-pulse rounded-full bg-[#ff5a6e] px-3 py-0.5 text-center text-xs font-bold text-white"
+              role="alert"
+            >
+              Survitesse : redresse !
+            </p>
+          }
           <canvas #chart class="chart h-14 w-full" aria-hidden="true"></canvas>
           <ol class="guide text-xs leading-relaxed text-white/70">
             <li><b class="text-peach">▲ Pull up</b> : 1,8 g jusqu’à 47° d’assiette</li>
@@ -613,14 +620,14 @@ export default class Day09Gravity {
 
   // ─────────────────────────────── pilotes
 
-  /** Le pilote de sécurité reprend la main : trop bas ou trop vite. */
+  /** Le pilote de sécurité reprend la main : l’avion sort de son domaine de vol. */
   private startRescue(): void {
     this.release();
     const ap = new Autopilot('recover');
     ap.loop = false;
     this.autopilot = ap;
     this.pilot.set('rescue');
-    this.banner.set('Trop bas ou trop vite : le commandant reprend la main…');
+    this.banner.set('Hors des limites de vol : le commandant reprend la main…');
   }
 
   private engageAuto(): void {
