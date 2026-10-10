@@ -1,5 +1,7 @@
 # Jour 10 : Fold
 
+![Aperçu](./preview.gif)
+
 Cinq origamis à plier pas à pas en 3D : une flèche montre le pli, on fait glisser la feuille au doigt ou à la souris, le pli se marque, et on enchaîne jusqu'au modèle fini, sur l'un des six papiers japonais au choix. Ensuite, un mode photo permet de le mettre en scène et de partager l'image.
 
 ## L'idée
