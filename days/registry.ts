@@ -123,5 +123,19 @@ export const DAY_ENTRIES: Partial<Record<number, DayEntry>> = {
       thumbnailFocus: 0.1,
     },
   },
+  10: {
+    component: () => import('./day-10-fold/day-10-fold').then((m) => m.default),
+    readme: () => import('./day-10-fold/README.md').then((m) => m.default),
+    // La touche T lance la démo : le kabuto plié pas à pas sur un papier seigaiha (dix plis en ~20 s, le
+    // doigt fantôme fait chaque geste), puis le casque se redresse et se balance ; la miniature le montre fini.
+    capture: {
+      click: null,
+      key: 't',
+      seconds: 30,
+      settle: 2500,
+      thumbnailAt: 25,
+      thumbnailFocus: 0.4,
+    },
+  },
   // new-day:insert
 };
