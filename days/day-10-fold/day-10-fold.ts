@@ -10,7 +10,10 @@ import {
 } from '@angular/core';
 import { MODELS, OrigamiModel } from './lib/models';
 import { PATTERNS, Pattern, swatch } from './lib/patterns';
+import { DECORS, paintBackdrop } from './lib/photo';
+import { PhotoStudio } from './lib/photo-studio';
 import type { FoldState, OrigamiScene } from './lib/scene';
+import { UI_STYLES } from './lib/ui';
 
 /** Les pictogrammes des modèles (24 × 24, trait). */
 const ICONS: Record<string, string> = {
@@ -37,22 +40,29 @@ const KIND: Record<string, string> = {
  */
 @Component({
   selector: 'app-day-10-fold',
+  imports: [PhotoStudio],
   host: {
     class: 'relative block size-full overflow-hidden select-none bg-night-floor text-white',
     '(document:keydown)': 'onKey($event)',
   },
   template: `
-    <div class="backdrop absolute inset-0" aria-hidden="true"></div>
-    <canvas
-      #canvas
-      class="absolute inset-0 size-full touch-none"
-      [class.cursor-grab]="!state().done && !state().dragging"
-      [class.cursor-grabbing]="state().dragging"
-      role="img"
-      [attr.aria-label]="
-        'Une feuille de papier sur un tapis de découpe : ' + model().name + ', étape ' + stepLabel()
-      "
-    ></canvas>
+    <!-- Le fond (peint en 2D, le même que sur les photos) et la scène 3D, filtrés ensemble en mode photo. -->
+    <div #stage class="absolute inset-0">
+      <canvas #backdrop class="absolute inset-0 size-full" aria-hidden="true"></canvas>
+      <canvas
+        #canvas
+        class="absolute inset-0 size-full touch-none"
+        [class.cursor-grab]="!state().done && !state().dragging"
+        [class.cursor-grabbing]="state().dragging"
+        role="img"
+        [attr.aria-label]="
+          'Une feuille de papier sur un tapis de découpe : ' +
+          model().name +
+          ', étape ' +
+          stepLabel()
+        "
+      ></canvas>
+    </div>
 
     @if (failed()) {
       <p class="absolute inset-0 grid place-items-center p-8 text-center text-white/80">
@@ -63,6 +73,7 @@ const KIND: Record<string, string> = {
     <header
       #top
       class="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-2 p-2 sm:p-3"
+      [class.hidden]="photo()"
     >
       <nav
         class="panel pointer-events-auto flex max-w-full gap-1 overflow-x-auto p-1 [scrollbar-width:none]"
@@ -132,6 +143,7 @@ const KIND: Record<string, string> = {
     <section
       #bottom
       class="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center p-2 sm:p-3"
+      [class.hidden]="photo()"
     >
       <div class="panel pointer-events-auto w-full max-w-xl p-3 sm:p-4" aria-live="polite">
         @if (!state().done) {
@@ -195,178 +207,128 @@ const KIND: Record<string, string> = {
             Yatta ! <span class="text-sakura">{{ capitalize(model().the) }}</span> est plié.
           </p>
           <p class="mt-1 text-sm text-white/70">
-            Fais-le tourner du doigt, essaie un autre papier, ou attaque le modèle suivant.
+            Fais-le tourner du doigt, prends-le en photo, ou attaque le modèle suivant.
           </p>
-          <div class="mt-3 flex items-center gap-2">
-            <button type="button" class="btn ghost" (click)="undo()">
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" class="btn ghost" (click)="undo()" title="Annuler le dernier pli">
               <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true">
                 <path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" />
               </svg>
-              Annuler
+              <span class="sr-only sm:not-sr-only">Annuler</span>
             </button>
-            <button type="button" class="btn ghost" (click)="restart()">
+            <button type="button" class="btn ghost" (click)="restart()" title="Replier">
               <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true">
                 <path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5" />
               </svg>
-              Replier
+              <span class="sr-only sm:not-sr-only">Replier</span>
             </button>
-            <button type="button" class="btn primary ml-auto" (click)="next()">
+            <button type="button" class="btn ghost ml-auto" (click)="next()">
               {{ nextModel().name }}
               <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true">
                 <path d="M5 12h14m-6-6 6 6-6 6" />
               </svg>
             </button>
+            <button type="button" class="btn primary" (click)="photo.set(true)">
+              <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true">
+                <path d="M4 8h3l2-3h6l2 3h3v11H4V8Zm8 9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+              </svg>
+              Mode photo
+            </button>
           </div>
         }
       </div>
     </section>
-  `,
-  styles: `
-    .backdrop {
-      background:
-        radial-gradient(90% 70% at 50% 45%, #241c6b 0%, transparent 70%),
-        radial-gradient(60% 50% at 85% 10%, rgb(255 202 236 / 0.12), transparent 70%), #0e0a35;
-    }
-    .panel {
-      border: 1px solid rgb(255 255 255 / 0.1);
-      border-radius: 1rem;
-      background: rgb(14 10 53 / 0.78);
-      box-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.6);
-      backdrop-filter: blur(10px);
-    }
-    .model {
-      display: flex;
-      flex-shrink: 0;
-      align-items: center;
-      gap: 0.45rem;
-      border-radius: 0.7rem;
-      padding: 0.35rem 0.6rem 0.35rem 0.45rem;
-      color: rgb(255 255 255 / 0.75);
-      transition:
-        background-color 0.15s,
-        color 0.15s;
-    }
-    .model:hover {
-      background: rgb(255 255 255 / 0.08);
-      color: #fff;
-    }
-    .model.on {
-      background: var(--color-sakura);
-      color: #1b1240;
-    }
-    .model svg path,
-    .icon-btn svg path,
-    .btn svg path {
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-    .level {
-      display: flex;
-      gap: 2px;
-      margin-top: 2px;
-    }
-    .level i {
-      width: 5px;
-      height: 5px;
-      border-radius: 99px;
-      background: currentColor;
-      opacity: 0.25;
-    }
-    .level i.full {
-      opacity: 0.9;
-    }
-    .swatch {
-      width: 1.9rem;
-      height: 1.9rem;
-      border-radius: 99px;
-      background-size: cover;
-      box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
-      transition:
-        transform 0.15s,
-        box-shadow 0.15s;
-    }
-    .swatch:hover {
-      transform: scale(1.08);
-    }
-    .swatch.on {
-      box-shadow:
-        0 0 0 2px #0e0a35,
-        0 0 0 4px var(--color-sakura);
-    }
-    .icon-btn {
-      display: grid;
-      place-items: center;
-      width: 1.9rem;
-      height: 1.9rem;
-      border-radius: 99px;
-      color: rgb(255 255 255 / 0.8);
-    }
-    .icon-btn:hover {
-      background: rgb(255 255 255 / 0.1);
-    }
-    .badge {
-      border-radius: 99px;
-      padding: 0.15rem 0.6rem;
-      background: rgb(255 126 182 / 0.16);
-      color: #ff9ec8;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-    .badge.mountain {
-      background: rgb(255 179 92 / 0.16);
-      color: #ffc27e;
-    }
-    .progress {
-      display: flex;
-      gap: 3px;
-    }
-    .progress li {
-      flex: 1;
-      height: 4px;
-      border-radius: 99px;
-      background: rgb(255 255 255 / 0.14);
-      transition: background-color 0.3s;
-    }
-    .progress li.done {
-      background: var(--color-sakura);
-    }
-    .progress li.now {
-      background: rgb(255 202 236 / 0.45);
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      border-radius: 0.65rem;
-      padding: 0.45rem 0.8rem;
-      font-size: 0.85rem;
-      font-weight: 700;
-      transition:
-        background-color 0.15s,
-        opacity 0.15s;
-    }
-    .btn:disabled {
-      opacity: 0.35;
-      pointer-events: none;
-    }
-    .btn.ghost {
-      background: rgb(255 255 255 / 0.08);
-      color: #fff;
-    }
-    .btn.ghost:hover {
-      background: rgb(255 255 255 / 0.16);
-    }
-    .btn.primary {
-      background: var(--color-sakura);
-      color: #1b1240;
-    }
-    .btn.primary:hover {
-      background: #ffd9f0;
+
+    @if (photo() && sceneRef(); as scene) {
+      <app-fold-photo
+        [scene]="scene"
+        [stage]="stageEl()"
+        [backdrop]="backdropEl()"
+        [model]="model()"
+        [pattern]="pattern()"
+        [patterns]="patterns"
+        [swatchUrl]="swatchFn"
+        (patternChange)="setPattern($event)"
+        (exit)="photo.set(false)"
+      />
     }
   `,
+  styles: [
+    UI_STYLES,
+    `
+      .model {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 0.45rem;
+        border-radius: 0.7rem;
+        padding: 0.35rem 0.6rem 0.35rem 0.45rem;
+        color: rgb(255 255 255 / 0.75);
+        transition:
+          background-color 0.15s,
+          color 0.15s;
+      }
+      .model:hover {
+        background: rgb(255 255 255 / 0.08);
+        color: #fff;
+      }
+      .model.on {
+        background: var(--color-sakura);
+        color: #1b1240;
+      }
+      .model svg path {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .level {
+        display: flex;
+        gap: 2px;
+        margin-top: 2px;
+      }
+      .level i {
+        width: 5px;
+        height: 5px;
+        border-radius: 99px;
+        background: currentColor;
+        opacity: 0.25;
+      }
+      .level i.full {
+        opacity: 0.9;
+      }
+      .badge {
+        border-radius: 99px;
+        padding: 0.15rem 0.6rem;
+        background: rgb(255 126 182 / 0.16);
+        color: #ff9ec8;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      .badge.mountain {
+        background: rgb(255 179 92 / 0.16);
+        color: #ffc27e;
+      }
+      .progress {
+        display: flex;
+        gap: 3px;
+      }
+      .progress li {
+        flex: 1;
+        height: 4px;
+        border-radius: 99px;
+        background: rgb(255 255 255 / 0.14);
+        transition: background-color 0.3s;
+      }
+      .progress li.done {
+        background: var(--color-sakura);
+      }
+      .progress li.now {
+        background: rgb(255 202 236 / 0.45);
+      }
+    `,
+  ],
 })
 export default class Day10Fold {
   protected readonly models = MODELS;
@@ -375,6 +337,8 @@ export default class Day10Fold {
   protected readonly pattern = signal<Pattern>(PATTERNS[1]);
   protected readonly muted = signal(false);
   protected readonly failed = signal(false);
+  protected readonly photo = signal(false);
+  protected readonly sceneRef = signal<OrigamiScene | null>(null);
   protected readonly state = signal<FoldState>({
     index: 0,
     total: MODELS[0].steps.length,
@@ -401,6 +365,11 @@ export default class Day10Fold {
   );
 
   private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
+  private readonly stage = viewChild.required<ElementRef<HTMLElement>>('stage');
+  private readonly backdrop = viewChild.required<ElementRef<HTMLCanvasElement>>('backdrop');
+  protected readonly stageEl = computed(() => this.stage().nativeElement);
+  protected readonly backdropEl = computed(() => this.backdrop().nativeElement);
+  protected readonly swatchFn = (p: Pattern) => this.swatchUrl(p);
   private readonly top = viewChild.required<ElementRef<HTMLElement>>('top');
   private readonly bottom = viewChild.required<ElementRef<HTMLElement>>('bottom');
   private scene: OrigamiScene | null = null;
@@ -415,11 +384,15 @@ export default class Day10Fold {
         if (destroyRef.destroyed) return;
         const scene = new OrigamiScene(this.canvas().nativeElement, (s) => this.state.set(s));
         this.scene = scene;
+        this.sceneRef.set(scene);
         scene.load(this.model(), this.pattern());
         destroyRef.onDestroy(() => scene.dispose());
 
         // On cadre le modèle entre la barre du haut et le panneau du bas, quelle que soit leur hauteur.
+        // (En mode photo, c'est le studio qui s'en charge.)
         const insets = () => {
+          if (this.photo()) return;
+          paintBackdrop(this.backdrop().nativeElement, DECORS[0]);
           const host = this.canvas().nativeElement.getBoundingClientRect();
           const top = this.top().nativeElement.getBoundingClientRect();
           const bottom = this.bottom()
@@ -494,7 +467,7 @@ export default class Day10Fold {
 
   /** Espace : montre-moi ; Retour arrière : annuler ; T : la démonstration (kabuto, papier seigaiha). */
   protected onKey(event: KeyboardEvent) {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.altKey || event.ctrlKey || event.metaKey || this.photo()) return;
     const target = event.target as HTMLElement | null;
     if (target && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(target.tagName) && event.key !== 't')
       return;

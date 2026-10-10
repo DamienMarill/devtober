@@ -92,6 +92,28 @@ export class PaperSound {
     thump.stop(t + 0.12);
   }
 
+  /** L'obturateur : deux clics secs, le miroir qui se lève puis retombe. */
+  shutter() {
+    const ctx = this.ctx;
+    if (!ctx || !this.noise || !this.master) return;
+    for (const [at, gain] of [
+      [0, 0.45],
+      [0.07, 0.3],
+    ] as const) {
+      const t = ctx.currentTime + at;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 3200;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
+      src.connect(bp).connect(g).connect(this.master);
+      src.start(t, Math.random() * 0.8, 0.05);
+    }
+  }
+
   /** Le modèle est fini : quatre notes de la gamme pentatonique, comme un petit furin. */
   done() {
     const ctx = this.ctx;

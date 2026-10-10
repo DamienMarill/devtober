@@ -7,7 +7,7 @@ export interface Pattern {
 }
 
 /** Petit générateur pseudo-aléatoire (mulberry32) : le même papier à chaque fois. */
-function rng(seed: number) {
+export function rng(seed: number) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -17,7 +17,7 @@ function rng(seed: number) {
 }
 
 /** Les fibres du washi : de courts filaments clairs et sombres, à peine visibles. */
-function fibers(ctx: CanvasRenderingContext2D, size: number, strength = 1, seed = 7) {
+export function fibers(ctx: CanvasRenderingContext2D, size: number, strength = 1, seed = 7) {
   const rand = rng(seed);
   ctx.save();
   ctx.lineCap = 'round';

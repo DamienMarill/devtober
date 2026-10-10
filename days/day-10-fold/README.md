@@ -1,6 +1,6 @@
 # Jour 10 : Fold
 
-Cinq origamis à plier pas à pas en 3D : une flèche montre le pli, on fait glisser la feuille au doigt ou à la souris, le pli se marque, et on enchaîne jusqu'au modèle fini, sur l'un des six papiers japonais au choix.
+Cinq origamis à plier pas à pas en 3D : une flèche montre le pli, on fait glisser la feuille au doigt ou à la souris, le pli se marque, et on enchaîne jusqu'au modèle fini, sur l'un des six papiers japonais au choix. Ensuite, un mode photo permet de le mettre en scène et de partager l'image.
 
 ## L'idée
 
@@ -19,17 +19,21 @@ const layer = (f: Facet) =>
       : top + 1 + (hi - f.layer);
 ```
 
-Les modèles ([`lib/models.ts`](./lib/models.ts)) sont de simples listes d'étapes. Pour viser « une seule épaisseur », chaque facette retient les étapes où elle a bougé (`only: ['half']`). [`lib/paper.spec.ts`](./lib/paper.spec.ts) plie les cinq modèles jusqu'au bout et vérifie que la surface reste 4, que tout s'annule, et que deux facettes qui se recouvrent n'ont jamais la même hauteur.
+Les modèles ([`lib/models.ts`](./lib/models.ts)) sont des listes d'étapes ; pour viser « une seule épaisseur », chaque facette retient les étapes où elle a bougé (`only: ['half']`). Les tests ([`lib/paper.spec.ts`](./lib/paper.spec.ts)) plient les cinq modèles jusqu'au bout.
 
-**L'animation** ([`lib/scene.ts`](./lib/scene.ts)) interpole entre l'état avant et l'état après : les facettes mobiles tournent autour de la droite du pli, et toutes glissent vers leur nouvelle hauteur dans la pile. Quand on fait glisser la feuille, je projette le geste sur la flèche, puis je retrouve l'angle qui amène la pointe sous le doigt : vue de dessus, elle avance comme 1 − cos θ.
+**L'animation** ([`lib/scene.ts`](./lib/scene.ts)) interpole entre l'état avant et l'état après : les facettes mobiles tournent autour de la droite du pli, et toutes glissent vers leur nouvelle hauteur dans la pile. Quand on fait glisser la feuille, je projette le geste sur la flèche et je retrouve l'angle qui amène la pointe sous le doigt (vue de dessus, elle avance comme 1 − cos θ). Lâchée après 42 %, elle finit le pli toute seule. Au repos, un doigt fantôme refait le geste ([`lib/guides.ts`](./lib/guides.ts)).
+
+**Le rendu** ([`lib/paper-mesh.ts`](./lib/paper-mesh.ts)) tient en un seul maillage, recalculé à chaque image. Recto et verso ont chacun leur texture, choisie dans le shader par `gl_FrontFacing`, et les plis marqués sont dessinés dedans. Les six motifs ([`lib/patterns.ts`](./lib/patterns.ts)) sont tracés en canvas, fibres du washi comprises. Le modèle fini se redresse (le cœur bat, l'avion plane).
+
+**Le mode photo** ([`lib/photo-studio.ts`](./lib/photo-studio.ts), [`lib/photo.ts`](./lib/photo.ts)) ajoute un viseur au format choisi, un décor peint en canvas (le même fond à l'écran et sur la photo), des pétales, confettis ou neige ([`lib/particles.ts`](./lib/particles.ts)), un cadre avec légende et un filtre. Pas de capture d'écran : je redessine seulement la zone du viseur en 1080 px de large (1920 en 16:9) avec `setViewOffset`, puis je copie le canvas WebGL tout de suite, avant qu'il soit effacé.
 
 ```ts
-const t = Math.acos(1 - progress * (1 - Math.cos(angle))) / angle;
+this.camera.setViewOffset(w * s, full * s, r.x * s, (y0 + r.y) * s, outW, outH);
+this.renderer.render(this.scene, this.camera);
+out.getContext('2d')!.drawImage(this.renderer.domElement, 0, 0);
 ```
 
-Lâchée après 42 %, la feuille finit le pli toute seule ; avant, elle revient. Au repos, un doigt fantôme refait le geste ([`lib/guides.ts`](./lib/guides.ts)).
-
-**Le rendu** ([`lib/paper-mesh.ts`](./lib/paper-mesh.ts)) tient en un seul maillage, recalculé à chaque image. Recto et verso ont chacun leur texture, choisie dans le shader par `gl_FrontFacing` ; les plis marqués sont dessinés dans ces textures. Les six motifs ([`lib/patterns.ts`](./lib/patterns.ts)) sont tracés en canvas : seigaiha, asanoha, sakura, ichimatsu, shippō et un vermillon uni, avec les fibres du washi par-dessus. Les sons ([`lib/sound.ts`](./lib/sound.ts)) sont du bruit blanc filtré. Le modèle fini se redresse (le cœur bat, l'avion plane) et on peut tourner autour.
+Les filtres sont les matrices de couleur des filtres CSS de l'aperçu. La photo part par le partage natif (`navigator.share` avec un fichier), en téléchargement ou dans le presse-papier.
 
 ## Lien avec le mot
 

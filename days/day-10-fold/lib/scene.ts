@@ -11,9 +11,11 @@ import {
   PCFShadowMap,
   PerspectiveCamera,
   Plane,
+  PlaneGeometry,
   Quaternion,
   Raycaster,
   Scene,
+  ShadowMaterial,
   TOUCH,
   Vector2,
   Vector3,
@@ -25,7 +27,9 @@ import { Guides } from './guides';
 import type { OrigamiModel } from './models';
 import { depths, Facet, Folder, Motion, topAt, Turn, worldPoly } from './paper';
 import { LAYER, PaperMesh, paperMaterial, PaperTextures } from './paper-mesh';
+import { Effect, Particles } from './particles';
 import type { Pattern } from './patterns';
+import { Decor, DECORS, Rect } from './photo';
 import { PaperSound } from './sound';
 import { cuttingMat } from './table';
 
@@ -99,6 +103,13 @@ export class OrigamiScene {
   private readonly raycaster = new Raycaster();
   private readonly resizer: ResizeObserver;
   private readonly observer: IntersectionObserver;
+  private readonly sky: HemisphereLight;
+  private readonly sun: DirectionalLight;
+  private readonly fill: DirectionalLight;
+  private readonly mat: Mesh;
+  /** Hors de l'atelier, un sol invisible qui ne garde que l'ombre du modèle. */
+  private readonly catcher: Mesh<PlaneGeometry, ShadowMaterial>;
+  private readonly particles = new Particles();
 
   private model!: OrigamiModel;
   private pattern!: Pattern;
@@ -126,6 +137,11 @@ export class OrigamiScene {
   private insets = { top: 0, bottom: 0 };
   /** Au chargement, la caméra se place d'un coup au lieu de glisser. */
   private snap = true;
+  /** Mode photo : la caméra appartient au photographe dès qu'il la touche. */
+  private photo = false;
+  private userCam = false;
+  private frozen = false;
+  private viewfinder: { w: number; h: number } | null = null;
   private frame = 0;
   private last = 0;
   private inView = true;
@@ -157,6 +173,9 @@ export class OrigamiScene {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
     this.controls.maxPolarAngle = 1.5;
+    this.controls.addEventListener('start', () => {
+      if (this.photo) this.userCam = true;
+    });
     this.setOrbit(false);
 
     const sky = new HemisphereLight(0xfff4ea, 0x2b2466, 1.5);
@@ -178,7 +197,15 @@ export class OrigamiScene {
     const fill = new DirectionalLight(0xfff6f0, 1.05);
     fill.position.set(0, 0, 1);
     this.camera.add(fill);
-    this.scene.add(sky, sun, rim, this.camera, cuttingMat(this.anisotropy));
+    this.mat = cuttingMat(this.anisotropy);
+    this.catcher = new Mesh(new PlaneGeometry(40, 40), new ShadowMaterial({ opacity: 0.25 }));
+    this.catcher.position.z = -0.004;
+    this.catcher.receiveShadow = true;
+    this.catcher.visible = false;
+    this.sky = sky;
+    this.sun = sun;
+    this.fill = fill;
+    this.scene.add(sky, sun, rim, this.camera, this.mat, this.catcher, this.particles.mesh);
 
     const blank = new PaperTextures(() => v(0, 0), 1);
     this.material = paperMaterial(blank.color, blank.white);
@@ -351,6 +378,90 @@ export class OrigamiScene {
 
   setMuted(muted: boolean) {
     this.sound.setMuted(muted);
+  }
+
+  // ───────────────────────────── mode photo
+
+  /** Entre en mode photo (le modèle doit être fini) ou en sort : on revient alors à l'atelier. */
+  setPhotoMode(on: boolean) {
+    this.photo = on && !!this.finale;
+    this.userCam = false;
+    const c = this.controls;
+    c.enableZoom = this.photo;
+    c.minDistance = this.photo ? this.finale!.radius * 1.4 : 0;
+    c.maxDistance = this.photo ? this.finale!.radius * 9 : Infinity;
+    if (!this.photo) {
+      this.setDecor(DECORS[0]);
+      this.setEffect('none');
+      this.setFrozen(false);
+      this.viewfinder = null;
+    }
+  }
+
+  /** La taille du viseur (px) : le modèle est cadré dedans tant qu'on ne touche pas à la caméra. */
+  setViewfinder(w: number, h: number) {
+    this.viewfinder = { w, h };
+  }
+
+  /** Recadre automatiquement le modèle dans le viseur. */
+  recenter() {
+    this.userCam = false;
+  }
+
+  setDecor(d: Decor) {
+    this.mat.visible = d.mat;
+    this.catcher.visible = !d.mat;
+    this.catcher.material.opacity = d.shadow;
+    const m = d.mood;
+    this.sky.color.setHex(m.sky);
+    this.sky.groundColor.setHex(m.ground);
+    this.sky.intensity = m.ambient;
+    this.sun.color.setHex(m.sun);
+    this.sun.intensity = m.sunIntensity;
+    this.fill.intensity = m.fill;
+  }
+
+  setEffect(effect: Effect) {
+    const f = this.finale;
+    const center = f
+      ? new Vector3(0, 0, this.model.finale === 'fly' ? 1 : f.radius + 0.12)
+      : new Vector3();
+    this.particles.setMode(effect, center, f?.radius ?? 1);
+  }
+
+  /** Fige le modèle (et ce qui tombe) pour composer la photo. */
+  setFrozen(frozen: boolean) {
+    this.frozen = frozen;
+  }
+
+  /**
+   * Rend la zone `r` du canvas (le viseur, en px CSS) à `width` pixels de large, sans l'interface : on
+   * agrandit la vue avec `setViewOffset`, on dessine une image, on la copie, puis on rend la taille normale.
+   * Le fond est transparent : le décor est peint à part.
+   */
+  capture(r: Rect, width: number): HTMLCanvasElement {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const shift = (this.insets.top - this.insets.bottom) / 2;
+    const full = h + 2 * Math.abs(shift);
+    const y0 = Math.abs(shift) - shift;
+    const s = width / r.w;
+    const outW = Math.round(width);
+    const outH = Math.round(r.h * s);
+    const ratio = this.renderer.getPixelRatio();
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(outW, outH, false);
+    this.camera.setViewOffset(w * s, full * s, r.x * s, (y0 + r.y) * s, outW, outH);
+    this.camera.updateProjectionMatrix();
+    this.renderer.render(this.scene, this.camera);
+    const out = document.createElement('canvas');
+    out.width = outW;
+    out.height = outH;
+    out.getContext('2d')!.drawImage(this.renderer.domElement, 0, 0);
+    this.renderer.setPixelRatio(ratio);
+    this.resize();
+    this.renderer.render(this.scene, this.camera);
+    return out;
   }
 
   private run(from: number, to: number, duration: number, done: () => void) {
@@ -536,6 +647,7 @@ export class OrigamiScene {
     this.clock += dt;
     this.animate(dt);
     this.place(dt);
+    if (!this.frozen) this.particles.step(dt);
     this.frameCamera(dt);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
@@ -655,7 +767,7 @@ export class OrigamiScene {
     const f = this.finale;
     if (!f) return;
     f.k = Math.min(1, f.k + dt / 1.3);
-    f.time += dt;
+    if (!this.frozen) f.time += dt;
     const k = easeInOut(f.k);
     const c = f.center;
     this.lift.position.set(-c.x, -c.y, -c.z + this.liftZ);
@@ -741,11 +853,16 @@ export class OrigamiScene {
       for (let i = 0; i < pos.length; i += 3)
         radius = Math.max(radius, Math.hypot(pos[i] - center.x, pos[i + 1] - center.y));
     }
+    // En mode photo, une fois que le photographe a pris la caméra, on ne la touche plus.
+    if (this.photo && this.userCam) return;
     const full = h + Math.abs(this.insets.top - this.insets.bottom);
     const safe = Math.max(120, h - this.insets.top - this.insets.bottom);
+    const fitW = this.viewfinder?.w ?? w;
+    const fitH = this.viewfinder?.h ?? safe;
     const tan = Math.tan((FOV * Math.PI) / 360);
-    const fit = radius / Math.min((tan * safe) / full, (tan * w) / full);
-    const goal = fit * (this.finale ? 1.25 : 1.15);
+    const fit = radius / Math.min((tan * fitH) / full, (tan * fitW) / full);
+    // En mode photo, le viseur montre exactement l'image : on serre le cadrage.
+    const goal = fit * (this.photo ? 1 : this.finale ? 1.25 : 1.15);
 
     const k = this.snap ? 1 : 1 - Math.exp(-dt * 2.6);
     this.snap = false;
@@ -781,6 +898,7 @@ export class OrigamiScene {
     this.canvas.removeEventListener('pointercancel', this.onUp);
     this.controls.dispose();
     this.guides.dispose();
+    this.particles.dispose();
     this.mesh.dispose();
     this.textures?.dispose();
     this.material.material.dispose();
